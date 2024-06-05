@@ -3,7 +3,7 @@ local M = {}
 function tag_file(file, tags)
     file = file:gsub("\"", "\\\"")
     tags = tags:gsub("\"", "\\\"")
-    local cmd = "bash -c \"tag -f \\\"" .. file .. "\\\" -a \\\"" .. tags .. "\\\" -w 2>/dev/null\""
+    local cmd = "bash -c \"tag -f \\\"" .. file .. "\\\" -a \\\"" .. tags .. "\\\" -w >/dev/null 2>/dev/null\""
     local r = os.execute(cmd)
     if not r then
         ya.notify {
