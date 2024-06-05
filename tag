@@ -4,7 +4,8 @@ set -Eeo pipefail
 #set -o xtrace
 shopt -s nullglob
 
-all=all
+all="$TAG_DEFAULT_DIR"
+[ -z "$all" ] && all=all
 
 delim=$'\n'
 
@@ -49,6 +50,7 @@ while [ ! "$(pwd)" = "/" ] && [ ! -d "$all" ] ; do
 done
 
 if [ "$(pwd)" = "/" ] ; then
+    echo "could not find $all"
     echo "$usage"
     exit 1
 fi

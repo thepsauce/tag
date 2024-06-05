@@ -1,0 +1,18 @@
+#!/bin/bash
+
+has_yazi=false
+
+set -e
+set -o xtrace
+
+base="$(pwd)"
+
+[ -d ~/.config/yazi/plugins/ ] && command -v yazi >/dev/null && has_yazi=true || true
+$has_yazi && ln -s "$base/tag.yazi" "$HOME/.config/yazi/plugins/" || true
+
+mkdir bin && cp tag bin/ || true
+PATH="$PATH:$base/bin"
+mkdir testing && cd testing
+mkdir all cute image video audio cool interesting mountain landscape
+touch all/{lol.jpg,cool.png,something.png,yes.mp4,what.mp3,ahem.png}
+$has_yazi && yazi all || tag -h
