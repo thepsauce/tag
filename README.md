@@ -29,7 +29,7 @@ cd tag &&
 ./test
 ```
 If you have yazi, the test program will detect this, put configuration files in
-`~/.config/yazi and start yazi`. If you did not yet bind `[` to anything else,
+`~/.config/yazi` and start yazi. If you did not yet bind `[` to anything else,
 it will be usable to tag a file.
 To clean up after the tests, remove `~/.config/yazi/plugins/tag.yazi` and remove
 the keybind from `~/.config/yazi/keybind.toml` (search for `run = "plugin tag"`).
@@ -48,5 +48,5 @@ run = "plugin tag"
 desc = "add tags"
 ```
 
-Then using `[` within yazi on a file within a child directory of `all/..` and
+Then using `[` within yazi on a file within a child directory of `$TAG_DEFAULT_DIR/..` and
 having the tag script on the path.
