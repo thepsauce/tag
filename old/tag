@@ -1,0 +1,233 @@
+#!/bin/bash
+
+usage="\
+usage:\n\
+get help:\n\
+  tag -h\n\
+\n\
+tag untagged files:\n\
+  tag\n\
+\n\
+remove files, they are moved into the .trash folder:\n\
+  tag -rm <names>\n\
+\n\
+restore files in the .trash folder:\n\
+  tag -R <names>\n\
+\n\
+rename file:\n\
+  tag -mv <old name> <new name>\n\
+\n\
+tag files in New directory:\n\
+  tag\n\
+\n\
+list all tags:\n\
+  tag -l\n\
+\n\
+show tags of given files:\n\
+  tag <files>\n\
+\n\
+add tags to given files:\n\
+  tag <files> -- <tags>"
+
+shopt -s extglob
+
+#set -o xtrace
+
+all_tags=()
+
+################################################
+# Get the tags of given file
+# $1: name
+# > stores the result in an array called `tags`
+get_tags() {
+    tags=()
+    real_file=
+
+    if [ -f "$1" ] ; then
+        real_file="$1"
+        return
+    fi
+
+    for t in "${all_tags[@]}" ; do
+        if [ -f "$t/$1" ] ; then
+            tags+=("$t")
+            [ -L "$t/$1" ] || real_file="$t/$1"
+        fi
+    done
+
+    if [ -z "$real_file" ] && [ ${#tags[@]} -ne 0 ] ; then
+        echo "error: links exist for '$1' but the file is not in a tag directory"
+        return 1
+    fi
+
+    if [ -z "$real_file" ] ; then
+        echo "file '$f' does not exist"
+        return 1
+    fi
+}
+
+for d in */ ; do
+    [ "$d" = "${d^}" ] || continue
+    all_tags+=("${d:0:-1}")
+done
+
+[ $# -eq 0 ] && {
+    echo -e "$usage"
+    exit
+}
+
+case "$1" in
+    -h|-help|--help)
+        echo -e "$usage"
+        exit
+        ;;
+    -l|-list|--list)
+        for t in "${all_tags[@]}" ; do echo "$t : $(ls -l "$t" | wc -l)" ; done
+        exit
+        ;;
+    -R)
+        shift
+        [ $# -lt 1 ] && echo "1 or more arguments needed for '$1'" && exit 1
+        for f in "$@" ; do
+            file=
+            files=()
+            for g in ".trash/$f"*[0-9] ; do
+                files+=("${g:7}")
+            done
+
+            [ ${#files[@]} -eq 0 ] && echo "there is no trash file for '$f'" && continue
+            if [ ${#files[@]} -ne 1 ] ; then
+                echo "there exist multiple matching trash files for '$f', select one"
+                select s in "${files[@]}" ; do
+                    [ -z "$s" ] && continue 2
+                    file="$s"
+                    break
+                done
+            else
+                file="${files[0]}"
+            fi
+
+            name="${file%%#+([0-9])}"
+            file=".trash/$file"
+            tags=()
+            if [ -f "${file}_tags}" ] ; then
+                while read -r t ; do
+                    tags+=("$t")
+                done < "${file}_tags"
+            fi
+
+            if [ "${#tags[@]}" -gt 0 ] ; then
+                first="${tags[0]}/$name"
+                cp "$file" "${tags[0]}/$name"
+
+                tags=("${tags[@]:1}")
+                for t in "${tags[@]}" ; do
+                    ln -s "../$first" "$t/$name" || continue 2
+                done
+            fi
+
+            rm "${file}_tags"
+        done
+        exit
+        ;;
+    -mv|--mv|-move|--move)
+        shift
+        [ $# -ne 2 ] && echo "2 arguments needed for '$1'" && exit 1
+        old="$1"
+        new="$2"
+        if [ "$new" = "$(basename "$new")" ] ; then
+            echo "the destination must be a base name"
+            exit 1
+        fi
+        for t in "${all_tags[@]}" ; do
+            if [ -f "$t/$new" ] ; then
+                echo "file '$new' already exists at '$t/$new'"
+                exit 1
+            fi
+        done
+        name="$(basename "$old")"
+        get_tags "$name" || exit
+        new_real_file="$(dirname "$real_file")"
+        for t in "${tags[@]}" ; do
+            [ -L "$t/$name" ] && ln -s "../$new_real_file" "$t/$new"
+        done
+        mv "$real_file" "$new_real_file"
+        exit
+        ;;
+    -rm|--rm|-remove|--remove)
+        shift
+        [ $# -lt 1 ] && echo "1 or more arguments needed for '$1'" && exit 1
+        mkdir -p .trash || exit 1
+        for f in "$@" ; do
+            index=0
+            while : ; do
+                file=".trash/${f}#$index"
+                [ -f "$file" ] && [ -f "${file}_tags" ] || break
+                ((index++))
+            done
+            # TODO:
+
+            [ -f "$f" ] && { mv -n "$f" "$file" || continue ; }
+
+            get_tags "$f" || continue
+            for t in "${tags[@]}" ; do
+                echo "$t"
+            done > "${file}_tags"
+
+            for t in "${tags[@]}" ; do
+                rm "$t/$f"
+            done
+        done
+        exit
+        ;;
+esac
+
+# state is f/a/r
+state="f"
+
+files=()
+append_tags=()
+
+while [ $# -ne 0 ] ; do
+    case "$1" in
+        --) state="a" ;;
+        *)
+            case "$state" in
+                a) append_tags+=("$1") ;;
+                f) files+=("$1") ;;
+            esac
+            ;;
+    esac
+    shift
+done
+
+if [ "$state" = "f" ] ; then
+    for f in "${files[@]}" ; do
+        name="$(basename "$f")"
+        get_tags "$name" || continue
+        echo -n "$name : "
+        for t in "${tags[@]}" ; do
+            echo -n "$t "
+        done
+        echo
+    done
+    exit
+fi
+
+if [ ${#append_tags[@]} -eq 0 ] ; then
+    echo "no tags given after --"
+    exit 1
+fi
+
+for t in "${append_tags[@]}" ; do
+    mkdir -p "$t"
+done
+
+for f in "${files[@]}" ; do
+    name="$(basename "$f")"
+    get_tags "$name" || continue
+    for t in "${append_tags[@]}" ; do
+        ln -s "../$real_file" "$t/$name"
+    done
+done
+

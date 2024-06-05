@@ -1,0 +1,91 @@
+A name is of any form but not including a slash
+A tag is a directory with name [A-Z]*
+
+Don't forget quoting for spaces!
+
+List all tags:
+    echo [A-Z]*/
+
+List tags of a file:
+    echo [A-Z]*/<name>
+or multiple files:
+    echo [A-Z]*/{<name1>,<name2>,...}
+
+List all files with a specific tag:
+    ls <tag>
+-with a specific set of tags
+
+Check if file has tag:
+    [ -f <tag>/<name> ]
+-if it has a specific set of tags
+-if the file exists
+
+Add a tag to a file:
+If it is the first time:
+    mv <file> <tag>/<name>
+For more tags:
+    ln -s ../<tag>/<name> <tag>/<name>
+-multiple tags at once
+-multiple files with multiple tags at once
+
+-Rename a file
+-Remove all tags from a file
+-Remove a single tag from a file
+
+Remove a file:
+    rm [A-Z]*/<name>
+
+======================
+using the tag script:
+
+Modes:
+Default is file mode.
+File mode(-f): An argument is added to the file list
+Tag mode(-t): An argument is added to the tag list
+Exclude mode(-x): An argument is added to the exclude list
+
+List all tags:
+    tag -l
+
+List tags of a file:
+    tag <name> -l
+or multiple files:
+    tag <name1> <name2> ... -l
+
+List all files with a specific tag:
+    tag -t <tag>
++with a specific set of tags:
+    tag -t <tag1> <tag2> ...
+
+Check if file has tag:
+    tag <name> -t <tag> -c
++if it has a specific set of tags:
+    tag <name> -t <tag1> <tag2> ... -c
++if the file exists:
+    tag <name> -f
+(or <name1> <name2> ... instead of <name>)
+
+Add a tag to a file:
+    tag <name> -a <tag>
+or multiple tags:
+    tag <name> -a <tag1> <tag2> ...
+or multiple files and multiple tags:
+    tag <name1> <name2> ... -a <tag1> <tag2> ...
+
+Rename a file:
+    tag -mv <old name> <new name>
+
+Remove all tags from a file:
+    tag <name> -rr
+
+Remove a single tag from a file:
+    tag <name> -r <tag>
+or multiple tags:
+    tag <name> -r <tag1> <tag2> ...
+or multiple files and multiple tags:
+    tag <name1> <name2> ... -r <tag1> <tag2> ...
+
+Mixing:
+Replacing two tags with one tag:
+    tag -t Media Static -r Media Static -a Image
+

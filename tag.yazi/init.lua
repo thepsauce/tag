@@ -1,7 +1,10 @@
 local M = {}
 
 function tag_file(file, tags)
-    local r = os.execute("bash -c \"tag -f " .. file .. " -a " .. tags .. " -w >/dev/null\"")
+    file = file:gsub("\"", "\\\"")
+    tags = tags:gsub("\"", "\\\"")
+    local cmd = "bash -c \"tag -f \\\"" .. file .. "\\\" -a \\\"" .. tags .. "\\\" -w 2>/dev/null\""
+    local r = os.execute(cmd)
     if not r then
         ya.notify {
             title = "Tag error",
@@ -157,7 +160,7 @@ end
 
 function input_tag(state, tags)
     local key
-    local cand, cands
+    local cand, cands, comp
 
     cands = gen_cands(tags, keys)
     -- additional + and . binds for first time
@@ -166,15 +169,16 @@ function input_tag(state, tags)
         table.insert(cands, { on = ".", desc = "Repeat" })
     end
 
-    cand = ya.which { cands = compact_cands(cands) }
+    comp = compact_cands(cands)
+    cand = ya.which { cands = comp }
     if not cand then
         return
     end
 
-    key = cands[cand].on
+    key = comp[cand].on
     -- handle the special binds
     if key == "+" then
-        local t, e = ya.input {
+        t, e = ya.input {
             title = "Tag file",
             position = { "center", x = -25, w = 50 },
         }
@@ -199,11 +203,12 @@ function input_tag(state, tags)
     --  get key presses until we have a unique tag to pick
     while #tags > 1 do
         cands = gen_cands(tags)
-        cand = ya.which { cands = compact_cands(cands) }
+        comp = compact_cands(cands)
+        cand = ya.which { cands = comp }
         if not cand then
             return
         end
-        key = cands[cand].on
+        key = comp[cand].on
         tags = filter_cands(cands, key)
     end
     tag_files(tags[1])

@@ -36,9 +36,10 @@ the keybind from `~/.config/yazi/keybind.toml` (search for `run = "plugin tag"`)
 
 ### Integration with yazi
 
-Using the [yazi](https://yazi-rs.github.io/) file manager, you can put the `tag.yazi` directory into
-`.config/yazi/plugins/tag.yazi` (best to put the repo somewhere and then create
-this as symlink for updates).
+Using the [yazi](https://yazi-rs.github.io/) file manager, you can put the
+`tag.yazi` directory into `.config/yazi/plugins/tag.yazi` (best to put the
+repository somewhere (I keep mine in ~/.repos) and then create this as symlink
+for updates).
 
 Then create a keybind to call the plugin, for example:
 ```toml
