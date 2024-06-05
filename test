@@ -3,16 +3,22 @@
 has_yazi=false
 
 set -e
-set -o xtrace
 
 base="$(pwd)"
+yazi="$HOME/.config/yazi/plugins"
 
-[ -d ~/.config/yazi/plugins/ ] && command -v yazi >/dev/null && has_yazi=true || true
-$has_yazi && ln -s "$base/tag.yazi" "$HOME/.config/yazi/plugins/" || true
+[ -d "$yazi" ] && command -v yazi >/dev/null && has_yazi=true || true
+if $has_yazi ; then
+    ln -s "$base/tag.yazi" "$yazi" >/dev/null || true
+    file="$yazi/keymap.toml"
+    grep -e 'on\s*=\s*\[\s*"\["\s*\]' "$file" >/dev/null ||
+        echo -e "[[manager.prepend_keymap]]\non = [ \"[\" ]\nrun = \"plugin tag\"\ndesc = \"add tags\"" >> "$file"
+fi
 
-mkdir bin && cp tag bin/ || true
+mkdir -p bin && cp -f tag bin/
 PATH="$PATH:$base/bin"
-mkdir testing && cd testing
-mkdir all cute image video audio cool interesting mountain landscape
+mkdir -p testing && cd testing
+mkdir -p all cute image video audio cool interesting mountain landscape
 touch all/{lol.jpg,cool.png,something.png,yes.mp4,what.mp3,ahem.png}
-$has_yazi && yazi all || tag -h
+$has_yazi && yazi all
+tag -h
