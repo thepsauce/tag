@@ -9,7 +9,7 @@ yazi="$HOME/.config/yazi/plugins"
 
 [ -d "$yazi" ] && command -v yazi >/dev/null && has_yazi=true || true
 if $has_yazi ; then
-    ln -s "$base/tag.yazi" "$yazi" >/dev/null || true
+    ln -s "$base/tag.yazi" "$yazi" 2>/dev/null || true
     file="$yazi/keymap.toml"
     grep -e 'on\s*=\s*\[\s*"\["\s*\]' "$file" >/dev/null ||
         echo -e "[[manager.prepend_keymap]]\non = [ \"[\" ]\nrun = \"plugin tag\"\ndesc = \"add tags\"" >> "$file"
