@@ -1,0 +1,5 @@
+__PROJECT_FILE=true
+project_name="cli"
+project_source_dirs=( "src" )
+project_common_flags=( -g -Wall -Wextra -Werror -O0 )
+project_linker_libs=( "-lncurses" )
