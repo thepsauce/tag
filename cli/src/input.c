@@ -7,42 +7,33 @@ struct input Input;
 
 void RenderInput(void)
 {
-    Rect r = Input.r;
-    DrawBox(Input.t, &r);
-    r.x++;
-    r.y++;
-    r.w -= 2;
-    r.h -= 2;
-    if (Input.p != NULL) {
-        Point p;
-        if (DrawStringExt(stdscr, &r, DS_WRAP | DS_DSEQ, &Input.p[Input.scroll], Input.index - Input.scroll, Input.len - Input.scroll, &p) == 0) {
-            SetCursor(r.x + p.x, r.y + p.y);
-        } else {
-            HideCursor();
-        }
-    }
-    mvprintw(1, 0, "%zu", Input.len);
+    struct text *const text = &Input.text;
+    text->flags |= DT_DRAWBOX;
+    DrawText(stdscr, text);
+    SetCursor(text->r.x + 1 + text->cur.x, text->r.y + 1 + text->cur.y);
+    mvprintw(1, 0, "%zu", text->len);
 }
 
 static inline int AcceptInput(const char *s)
 {
+    struct text *const text = &Input.text;
     const size_t l = strlen(s);
-    if (Input.len + l + 1 > Input.cap) {
-        Input.cap *= 2;
-        Input.cap += l + 1;
-        char *const p = Realloc(Input.p, Input.cap);
+    if (text->len + l + 1 > text->cap) {
+        text->cap *= 2;
+        text->cap += l + 1;
+        char *const p = Realloc(text->s, text->cap);
         if (p == NULL) {
             return -1;
         }
-        Input.p = p;
+        text->s = p;
     }
-    memmove(&Input.p[Input.index + l],
-            &Input.p[Input.index],
-            Input.len - Input.index);
-    memcpy(&Input.p[Input.index], s, l);
-    Input.len += l;
-    Input.index += l;
-    Input.p[Input.len] = '\0';
+    memmove(&text->s[text->index + l],
+            &text->s[text->index],
+            text->len - text->index);
+    memcpy(&text->s[text->index], s, l);
+    text->len += l;
+    text->index += l;
+    text->s[text->len] = '\0';
     return 0;
 }
 

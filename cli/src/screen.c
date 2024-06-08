@@ -156,7 +156,7 @@ int Dialog(const char *title, const char *format, ...)
         r.x + r.w / 5, r.y + r.h / 5,
         r.w * 4 / 5, r.h * 4 / 5
     };
-    DrawString(&tr, DS_WRAP | DS_DSEQ, msg);
+    DrawString(&tr, DT_WRAP | DT_TERM, msg);
 
     tr.x = r.x + 3;
     tr.y = r.y + r.h - 1;
@@ -171,9 +171,9 @@ int Dialog(const char *title, const char *format, ...)
         }
         o[no++] = b[1];
         DrawString(&tr, 0, opt);
-        const int w = StringWidth(opt, strlen(opt), 0) + 1;
+        /*const int w = StringWidth(opt, strlen(opt), 0) + 1;
         tr.x += w;
-        tr.w -= w;
+        tr.w -= w;*/
     }
     va_end(l);
 

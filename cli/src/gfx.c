@@ -284,6 +284,28 @@ int AddPoint(struct stroke *st, Point pt)
     return 0;
 }
 
+bool IsValidGlyph(const char *s, size_t l)
+{
+	if ((unsigned) s[0] <= 0x7f) {
+		return true;
+	}
+	if ((s[0] & 0xe0) == 0xc0) {
+		return l >= 2 && (s[1] & 0xc0) == 0x80;
+	}
+	if ((s[0] & 0xf0) == 0xe0) {
+		return l >= 3 &&
+			(s[1] & 0xc0) == 0x80 &&
+			(s[2] & 0xc0) == 0x80;
+    }
+	if ((s[0] & 0xf8) == 0xf0) {
+		return l >= 4 &&
+			(s[1] & 0xc0) == 0x80 &&
+			(s[2] & 0xc0) == 0x80 &&
+			(s[3] & 0xc0) == 0x80;
+	}
+	return false;
+}
+
 size_t GlyphByteCount(const char *s)
 {
     size_t c = 0;
@@ -319,174 +341,6 @@ int GlyphWidth(const char *s)
     return wcwidth(wc);
 }
 
-bool StringFitting(const char *s, size_t n, int max, int flags, struct fitting *fit)
-{
-    bool f = true;
-
-    const int om = max;
-    fit->s = (char*) s;
-    while (n != 0) {
-        if ((flags & DS_DSEQ) && *s == '$') {
-            if (n > 1) {
-                s++;
-                n--;
-                if (*s != '$') {
-                    s++;
-                    n--;
-                    continue;
-                }
-            }
-        } else if (*s == '\n') {
-            break;
-        }
-
-        const int w = GlyphWidth(s);
-        if (w > max) {
-            f = false;
-            break;
-        }
-        max -= w;
-
-        const int c = GlyphByteCount(s);
-        s += c;
-        n -= c;
-    }
-    fit->w = om - max;
-    fit->e = (char*) s;
-    return f;
-}
-
-bool StringFitting0(const char *s, int max, int flags, struct fitting *fit)
-{
-    bool f = true;
-
-    const int om = max;
-    fit->s = (char*) s;
-    while (*s != '\0') {
-        if ((flags & DS_DSEQ) && *s == '$') {
-            if (s[1] != '\0') {
-                s++;
-                if (*s != '$') {
-                    s++;
-                    continue;
-                }
-            }
-        } else if (*s == '\n') {
-            break;
-        }
-
-        const int w = GlyphWidth(s);
-        if (w > max) {
-            f = false;
-            break;
-        }
-        max -= w;
-
-        s += GlyphByteCount(s);
-    }
-    fit->w = om - max;
-    fit->e = (char*) s;
-    return f;
-}
-
-int StringWidth(const char *s, size_t n, int flags)
-{
-    struct fitting fit;
-
-    StringFitting(s, n, INT_MAX, flags, &fit);
-    return fit.w;
-}
-
-int DrawStringExt(WINDOW *win, const Rect *r, int flags, const char *s, size_t ind, size_t len, Point *cur, ...)
-{
-    va_list l;
-    attr_t attr;
-    int color;
-
-    if (r->w <= 0) {
-        return 1;
-    }
-
-    va_start(l, cur);
-
-    int32_t x = 0, y = 0;
-    for (size_t i = 0, c; i < len; i += c) {
-        if (i == ind) {
-            cur->x = x;
-            cur->y = y;
-        }
-        if (s[i] == '$' && (flags & DS_DSEQ)) {
-            i++;
-            switch (s[i]) {
-            case '0':
-                attr = 0;
-                color = 0;
-                break;
-            case 'r':
-                color = CP_RED;
-                break;
-            case 'g':
-                color = CP_GREEN;
-                break;
-            case 'b':
-                color = CP_BLUE;
-                break;
-            case 'c':
-                color = CP_CYAN;
-                break;
-            case 'y':
-                color = CP_YELLOW;
-                break;
-            case 'm':
-                color = CP_MAGENTA;
-                break;
-            case 'i':
-                attr |= A_ITALIC;
-                break;
-            case 'd':
-                attr |= A_BOLD;
-                break;
-            case 'a':
-                attr |= va_arg(l, int);
-                break;
-            default:
-                i--;
-                /* fall through */
-            case '$':
-                goto end;
-            }
-            if (i == ind) {
-                cur->x = x;
-                cur->y = y;
-            }
-            wattr_set(win, attr, color, NULL);
-            c = 1;
-            continue;
-        }
-end:
-        c = GlyphByteCount(&s[i]);
-        const int w = GlyphWidth(&s[i]);
-        if (x + w >= r->w) {
-            x = 0;
-            y++;
-        }
-        if (y >= r->h && !(flags & DS_DRY)) {
-            break;
-        }
-        if (!(flags & DS_DRY)) {
-            move(r->y + y, r->x + x);
-            waddnstr(win, &s[i], c);
-        }
-        x += w;
-    }
-    if (ind == len) {
-        cur->x = x;
-        cur->y = y;
-    }
-    va_end(l);
-    return y >= r->h;
-}
-
 void DrawBox(const char *title, Rect *r)
 {
     /* draw border */
@@ -509,7 +363,7 @@ void DrawBox(const char *title, Rect *r)
         t.w = r->x + r->w - r->x - 3;
         t.h = 1;
         sprintf(b, " %s ", title);
-        DrawString(&t, DS_DSEQ, b);
+        DrawString(&t, DT_TERM, b);
     }
     /* erase content */
     for (int y = 1; y < r->h - 1; y++) {

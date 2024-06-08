@@ -6,12 +6,7 @@
 #include <stddef.h>
 
 extern struct input {
-    Rect r;
-    const char *t;
-    char *p;
-    size_t len, cap;
-    size_t index;
-    size_t scroll;
+    struct text text;
 } Input;
 
 int InputHandle(int key);

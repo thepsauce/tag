@@ -7,13 +7,22 @@
 #define TRACE
 #include <ncurses.h>
 
-#define DS_DSEQ 0x1
-#define DS_WRAP 0x2
-#define DS_DRY 0x4
+#define DT_TERM 0x1
+#define DT_WRAP 0x2
+#define DT_DRY 0x4
+#define DT_ADJCUR 0x8
+#define DT_ADJIND 0x10
+#define DT_ADJSEL 0x20
+#define DT_SEL 0x40
+#define DT_DRAWBOX 0x80
+#define DT_SCROLL 0x100
+#define DT_ADJVCT 0x200
 
 /*
- * utf8 helper functions, const char *s is always a valid utf8 string
+ * utf8 helper functions
  */
+
+bool IsValidGlyph(const char *s, size_t l);
 
 /*
  * get the count of bytes of the next glyph
@@ -33,38 +42,45 @@ size_t GlyphByteCountR(const char *s);
  */
 int GlyphWidth(const char *s);
 
-struct fitting {
-    char *s, *e;
-    int w;
+struct text {
+    int flags;
+    /* position and size of the text */
+    Rect r;
+    /* title of the box (DT_DRAWBOX) */
+    char *t;
+    /* textual data */
+    char *s;
+    /* index within the text */
+    size_t index;
+    /* length and capacity of text */
+    size_t len, cap;
+    /* start of selection */
+    size_t sel;
+    /* vertical column tracking */
+    int32_t vct;
+    /* horizontal/vertical scrolling (DT_SCROLL) */
+    Point scroll;
+    /* cursor position */
+    Point cur;
+    /* additional attributes (DT_TERM) */
+    attr_t *attrs;
+    int *colors;
 };
 
 /*
- * returns if the string fits but always updates fit by placing the start
- * and end of the string that fit into it and the occupied width, this function
- * stops upon a '\n'
+ * also takes DT_WRAP as flag to wrap text
  */
-bool StringFitting(const char *s, size_t n, int max, int flags, struct fitting *fit);
-
-/*
- * for a null terminated string
- */
-bool StringFitting0(const char *s, int max, int flags, struct fitting *fit);
-
-/*
- * get the width of the entire string. If the DS_DSEQ flag is enabled,
- * then the interpretation of dollar sequences is enabled
- */
-int StringWidth(const char *s, size_t n, int flags);
-
-/*
- * also takes DS_WRAP as flag to wrap text
- */
-int DrawStringExt(WINDOW *win, const Rect *r, int flags, const char *s, size_t ind, size_t len, Point *cur, ...);
-#define DrawString(r, f, s, ...) \
+int DrawText(WINDOW *win, struct text *text);
+#define DrawString(_r, f, _s) \
 ({ \
-    const char * const _s = (s); \
-    Point _p; \
-    DrawStringExt(stdscr, (r), (f), _s, 0, strlen(_s), &_p, #__VA_ARGS__); \
+    struct text _t; \
+    memset(&_t, 0, sizeof(_t)); \
+    _t.r = *(_r); \
+    _t.s = (char*) (_s); \
+    _t.flags = (f); \
+    _t.index = 0; \
+    _t.len = strlen(_t.s); \
+    DrawText(stdscr, &_t); \
 })
 
 /* --- --- --- --- ---

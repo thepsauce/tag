@@ -13,7 +13,7 @@ int RunUI(void)
 {
     struct event ev;
 
-    Input.r = (Rect) { 3, 4, 40, 5 };
+    Input.text.r = (Rect) { 3, 4, 40, 5 };
 
     UIRunning = true;
     while (UIRunning) {
