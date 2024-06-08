@@ -341,6 +341,25 @@ int GlyphWidth(const char *s)
     return wcwidth(wc);
 }
 
+size_t ConvertDistance(const char *s, size_t n, size_t i, int dir, size_t a)
+{
+    const size_t first = i;
+    if (dir > 0) {
+        for(; i < n && a > 0; a--) {
+            i += GlyphByteCount(&s[i]);
+        }
+        return i - first;
+    }
+    for (; i > 0 && a > 0; a--) {
+        while ((s[--i] & 0xc0) == 0x80) {
+            if (i > 0 && !(s[i - 1] & 0x80)) {
+                break;
+            }
+        }
+    }
+    return first - i;
+}
+
 void DrawBox(const char *title, Rect *r)
 {
     /* draw border */

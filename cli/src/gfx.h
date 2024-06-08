@@ -42,6 +42,8 @@ size_t GlyphByteCountR(const char *s);
  */
 int GlyphWidth(const char *s);
 
+size_t ConvertDistance(const char *s, size_t n, size_t i, int dir, size_t a);
+
 struct text {
     int flags;
     /* position and size of the text */
@@ -66,6 +68,11 @@ struct text {
     attr_t *attrs;
     int *colors;
 };
+
+int InsertText(struct text *text, const char *s);
+size_t DeleteBytes(struct text *text, int dir, size_t amount);
+size_t DeleteGlyphs(struct text *text, int dir, size_t amount);
+size_t MoveTextCursor(struct text *text, int dir, size_t amount);
 
 /*
  * also takes DT_WRAP as flag to wrap text

@@ -1,7 +1,71 @@
+#include "screen.h"
 #include "gfx.h"
 
 #include <ctype.h>
 #include <string.h>
+
+int InsertText(struct text *text, const char *s)
+{
+    const size_t l = strlen(s);
+    if (text->len + l + 1 > text->cap) {
+        text->cap *= 2;
+        text->cap += l + 1;
+        char *const p = Realloc(text->s, text->cap);
+        if (p == NULL) {
+            return -1;
+        }
+        text->s = p;
+    }
+
+    memmove(&text->s[text->index + l],
+            &text->s[text->index],
+            text->len - text->index);
+    memcpy(&text->s[text->index], s, l);
+    text->len += l;
+    text->index += l;
+    text->s[text->len] = '\0';
+    return 0;
+}
+
+size_t DeleteBytes(struct text *text, int dir, size_t amount)
+{
+    if (amount == 0) {
+        return 0;
+    }
+
+    if (dir > 0) {
+        memmove(text->s + text->index,
+            text->s + text->index + amount,
+            text->len - text->index);
+    } else {
+        memmove(text->s + text->index - amount,
+            text->s + text->index,
+            text->len - text->index);
+        text->index -= amount;
+    }
+    text->len -= amount;
+
+    text->flags |= DT_ADJVCT;
+    return amount;
+}
+
+size_t DeleteGlyphs(struct text *text, int dir, size_t amount)
+{
+    amount = ConvertDistance(text->s, text->len, text->index, dir, amount);
+    return DeleteBytes(text, dir, amount);
+}
+
+size_t MoveTextCursor(struct text *text, int dir, size_t amount)
+{
+    amount = ConvertDistance(text->s, text->len, text->index, dir, amount);
+    if (dir > 0) {
+        text->index += amount;
+    } else {
+        text->index -= amount;
+    }
+    text->flags |= DT_ADJVCT;
+    return amount;
+}
 
 int DrawText(WINDOW *win, struct text *text)
 {
@@ -22,14 +86,15 @@ int DrawText(WINDOW *win, struct text *text)
         return 1;
     }
 
-    /* get caret position */
+    /* get cursor position */
     cur.x = 0;
     cur.y = 0;
     for (size_t i = 0;; ) {
         if (text->flags & DT_ADJIND) {
-            if (text->cur.x <= cur.x && text->cur.y == cur.y) {
+            if (text->cur.x <= cur.x && text->cur.y <= cur.y) {
                 text->index = i;
                 text->cur.x = cur.x;
+                text->cur.y = cur.y;
                 text->flags &= ~DT_ADJIND;
             }
         } else if (i == text->index) {
@@ -52,9 +117,10 @@ int DrawText(WINDOW *win, struct text *text)
         const char ch = text->s[i];
         if (ch == '\n') {
             if (text->flags & DT_ADJIND) {
-                if (text->cur.y == cur.y) {
+                if (text->cur.y <= cur.y) {
                     text->index = i;
                     text->cur.x = cur.x;
+                    text->cur.y = cur.y;
                     text->flags &= ~DT_ADJIND;
                 }
             }
@@ -85,9 +151,25 @@ int DrawText(WINDOW *win, struct text *text)
                 }
             }
             if (cur.x + cw > r.w) {
+                if (text->flags & DT_ADJIND) {
+                    if (text->cur.y <= cur.y) {
+                        text->index = i;
+                        text->cur.x = cur.x;
+                        text->cur.y = cur.y;
+                        text->flags &= ~DT_ADJIND;
+                    }
+                }
                 cur.x = cw;
                 cur.y++;
             } else if (cur.x + cw == r.w) {
+                if (text->flags & DT_ADJIND) {
+                    if (text->cur.y <= cur.y) {
+                        text->index = i + l;
+                        text->cur.x = 0;
+                        text->cur.y = cur.y + 1;
+                        text->flags &= ~DT_ADJIND;
+                    }
+                }
                 cur.x = 0;
                 cur.y++;
             } else {
@@ -96,7 +178,6 @@ int DrawText(WINDOW *win, struct text *text)
             i += l;
         }
     }
-    text->cur.y = cur.y;
     if (text->flags & DT_ADJVCT) {
         text->flags &= ~DT_ADJVCT;
         text->vct = text->cur.x;
@@ -136,15 +217,10 @@ int DrawText(WINDOW *win, struct text *text)
         maxsel = 0;
     }
 
-    text->cur.x -= text->scroll.x;
-    text->cur.y -= text->scroll.y;
-
     /* render text */
-    cur.x = 0;
-    cur.y = 0;
     wattr_set(win, 0, 1, NULL);
-    cur.x -= text->scroll.x;
-    cur.y -= text->scroll.y;
+    cur.x = -text->scroll.x;
+    cur.y = -text->scroll.y;
     wmove(win, r.y + cur.y, r.x + cur.x);
     for (size_t i = 0; i < text->len; ) {
         const char ch = text->s[i];
@@ -152,7 +228,7 @@ int DrawText(WINDOW *win, struct text *text)
         size_t l = 0;
         int32_t cw;
 
-        if (cur.y > text->scroll.y + r.h - 1) {
+        if (cur.y >= r.h) {
             break;
         }
 
@@ -210,6 +286,9 @@ int DrawText(WINDOW *win, struct text *text)
             cur.x = 0;
             cur.y++;
             wmove(win, r.y + cur.y, r.x);
+        }
+        if (cur.y >= r.h) {
+            break;
         }
         if (cur.y >= 0) {
             waddstr(win, b);

@@ -1,4 +1,5 @@
 #include "input.h"
+#include "gfx.h"
 #include "screen.h"
 
 #include <string.h>
@@ -10,7 +11,8 @@ void RenderInput(void)
     struct text *const text = &Input.text;
     text->flags |= DT_DRAWBOX;
     DrawText(stdscr, text);
-    SetCursor(text->r.x + 1 + text->cur.x, text->r.y + 1 + text->cur.y);
+    SetCursor(text->r.x + 1 + text->cur.x - text->scroll.x,
+            text->r.y + 1 + text->cur.y - text->scroll.y);
     mvprintw(1, 0, "%zu", text->len);
 }
 
@@ -48,11 +50,33 @@ int InputHandle(int key)
             buf[i] = getch();
         }
         buf[c] = '\0';
-        return AcceptInput(buf);
+        return InsertText(&Input.text, buf);
     }
     switch (key) {
     case 0x7f:
     case KEY_DC:
+        DeleteGlyphs(&Input.text, 1, 1);
+        break;
+    case KEY_BACKSPACE:
+        DeleteGlyphs(&Input.text, -1, 1);
+        break;
+    case KEY_LEFT:
+        MoveTextCursor(&Input.text, -1, 1);
+        break;
+    case KEY_RIGHT:
+        MoveTextCursor(&Input.text, 1, 1);
+        break;
+    case KEY_UP:
+    case KEY_DOWN:
+        Input.text.cur.x = Input.text.vct;
+        Input.text.cur.y += key == KEY_UP ? -1 : 1;
+        Input.text.flags |= DT_ADJIND;
+        break;
+    case KEY_HOME:
+    case KEY_END:
+        Input.text.cur.x = key == KEY_HOME ? 0 : INT32_MAX;
+        Input.text.flags |= DT_ADJVCT;
+        Input.text.flags |= DT_ADJIND;
         break;
     }
     return 0;
