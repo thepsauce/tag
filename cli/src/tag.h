@@ -83,6 +83,8 @@ struct file {
     uint8_t *tags;
 };
 
+char *GetFilePath(const char *name);
+
 extern struct file_list {
     pthread_mutex_t lock;
     struct file *files;

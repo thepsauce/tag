@@ -23,7 +23,6 @@ extern struct scroller {
     size_t scroll;
     int height;
     uint8_t *Comps;
-    char *filter;
 } Scroller;
 
 void RenderScroller(void);

@@ -24,6 +24,8 @@ int InsertText(struct text *text, const char *s)
     text->len += l;
     text->index += l;
     text->s[text->len] = '\0';
+
+    text->flags |= DT_ADJVCT;
     return 0;
 }
 
@@ -150,6 +152,7 @@ int DrawText(WINDOW *win, struct text *text)
                     cw = GlyphWidth(&text->s[i]);
                 }
             }
+
             if (cur.x + cw > r.w && (text->flags & DT_WRAP)) {
                 if (text->flags & DT_ADJIND) {
                     if (text->cur.y <= cur.y) {
@@ -191,9 +194,12 @@ int DrawText(WINDOW *win, struct text *text)
     }
 
     if (text->cur.x < text->scroll.x) {
-        text->scroll.x = text->cur.x;
+        text->scroll.x = text->cur.x - 5;
+        if (text->scroll.x < 0) {
+            text->scroll.x = 0;
+        }
     } else if (text->cur.x >= r.w + text->scroll.x) {
-        text->scroll.x = text->cur.x - (r.w - 1);
+        text->scroll.x = text->cur.x - (r.w - 6);
     }
 
     if (text->cur.y < text->scroll.y) {
@@ -221,8 +227,6 @@ int DrawText(WINDOW *win, struct text *text)
     cur.y = -text->scroll.y;
     for (size_t i = 0, l; i < text->len; i += l) {
         const char ch = text->s[i];
-        char b[12];
-        int32_t cw;
 
         if (cur.y >= r.h) {
             break;
@@ -239,6 +243,8 @@ int DrawText(WINDOW *win, struct text *text)
             wattr_off(win, A_REVERSE, NULL);
         }
 
+        int32_t cw;
+
         if (ch == '\n') {
             cur.x = 0;
             cur.y++;
@@ -246,6 +252,8 @@ int DrawText(WINDOW *win, struct text *text)
             l = 1;
             continue;
         }
+
+        char b[12];
         if (ch == '\t') {
             cw = 0;
             l = 0;
@@ -275,6 +283,7 @@ int DrawText(WINDOW *win, struct text *text)
                 cw = GlyphWidth(b);
             }
         }
+
         if (cur.x + cw > r.w && (text->flags & DT_WRAP)) {
             cur.x = 0;
             cur.y++;
@@ -287,6 +296,7 @@ int DrawText(WINDOW *win, struct text *text)
         }
         cur.x += cw;
     }
+
     if (text->len == text->index) {
         if (text->len >= minsel && text->len <= maxsel) {
             wcolor_set(win, 0, NULL);

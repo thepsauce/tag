@@ -6,6 +6,7 @@
 #include <stddef.h>
 
 extern struct input {
+    bool shown;
     struct text text;
 } Input;
 

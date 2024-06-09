@@ -18,13 +18,14 @@ int RunUI(void)
         GetEvent(&ev);
         switch (ev.type) {
         case EV_KEYDOWN:
-            if (ev.key == 'C' - 'A' + 1) {
-                UIRunning = false;
+            if (Input.shown) {
+                InputHandle(ev.key);
                 break;
             }
-            InputHandle(ev.key);
-            break;
             switch (ev.key) {
+            case 'f':
+                Input.shown = true;
+                break;
             case 'k':
                 MoveScroller(1, -1);
                 break;
@@ -37,6 +38,16 @@ int RunUI(void)
             case 'G':
                 MoveScroller(SIZE_MAX, 1);
                 break;
+            case '\n': {
+                if (Scroller.num == 0) {
+                    break;
+                }
+                struct file *const file = &FileList.files[Scroller.rei[Scroller.index]];
+                if (fork() == 0) {
+                    execl("/usr/bin/feh", "feh", GetFilePath(file->name), NULL);
+                }
+                break;
+            }
             case 'q':
                 UIRunning = false;
                 break;
@@ -55,7 +66,9 @@ void RenderUI(void)
     }
     erase();
     RenderScroller();
-    RenderInput();
+    if (Input.shown) {
+        RenderInput();
+    }
     mvprintw(0, 0, "%zu", TagList.num);
 }
 

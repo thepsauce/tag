@@ -1,6 +1,7 @@
 #include "tag.h"
 #include "scroller.h"
 #include "screen.h"
+#include "input.h"
 
 #include <fnmatch.h>
 #include <string.h>
@@ -60,12 +61,16 @@ int NotifyScroller(void)
         }
         Scroller.rei = v;
     }
-    Scroller.filter = strdup("*a*");
-    if (Scroller.filter != NULL) {
+    if (Input.text.s != NULL) {
+        char filter[Input.text.len + 3];
+        filter[0] = '*';
+        memcpy(&filter[1], Input.text.s, Input.text.len);
+        filter[Input.text.len + 1] = '*';
+        filter[Input.text.len + 2] = '\0';
         Scroller.num = 0;
         for (size_t i = 0; i < FileList.num; i++) {
             char *const name = FileList.files[i].name;
-            if (fnmatch(Scroller.filter, name, FNM_NOESCAPE) == 0) {
+            if (fnmatch(filter, name, FNM_NOESCAPE) == 0) {
                 Scroller.rei[Scroller.num++] = i;
             }
         }

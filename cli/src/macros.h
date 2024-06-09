@@ -5,16 +5,16 @@
 
 #define MAX(a, b) \
 ({ \
-	__auto_type _a = (a); \
-	__auto_type _b = (b); \
-	_a > _b ? _a : _b; \
+    __auto_type _a = (a); \
+    __auto_type _b = (b); \
+    _a > _b ? _a : _b; \
 })
 
 #define MIN(a, b) \
 ({ \
-	__auto_type _a = (a); \
-	__auto_type _b = (b); \
-	_a < _b ? _a : _b; \
+    __auto_type _a = (a); \
+    __auto_type _b = (b); \
+    _a < _b ? _a : _b; \
 })
 
 #define CONTROL(ch) ((ch)-'A'+1)

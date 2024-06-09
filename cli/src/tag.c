@@ -119,7 +119,7 @@ static int GetTags(struct file *f)
     return 0;
 }
 
-static char *GetFilePath(const char *name)
+char *GetFilePath(const char *name)
 {
     static char buf[NAME_MAX + 1 + NAME_MAX + 1];
     snprintf(buf, sizeof(buf), "%s/%s", Default, name);
