@@ -179,6 +179,7 @@ int CacheFiles(void)
     DIR *dir;
     int fd;
     struct dirent *ent;
+    size_t c = 0;
 
     dir = opendir(Default);
     if (dir == NULL) {
@@ -191,18 +192,19 @@ int CacheFiles(void)
             continue;
         }
         if (AddFile(ent->d_name, fd) < 0) {
-            goto err;
+            closedir(dir);
+            return -1;
+        }
+        c++;
+        if (c == 64) {
+            NotifyScroller();
+            c = 0;
         }
     }
-    return 0;
-
-err:
-    closedir(dir);
-    for (size_t i = 0; i < FileList.num; i++) {
-        Free(FileList.files[i].name);
+    if (c > 0) {
+        NotifyScroller();
     }
-    Free(FileList.files);
-    return -1;
+    return 0;
 }
 
 int CacheTags(void)
@@ -236,9 +238,9 @@ err:
     return -1;
 }
 
-void *WatchThread(void *arg)
+void *WatchThread(void *unused)
 {
-    (void) arg;
+    (void) unused;
 
     char buf[4096];
     ssize_t len;
@@ -270,6 +272,15 @@ void *WatchThread(void *arg)
     return NULL;
 }
 
+void *CacheThread(void *unused)
+{
+    (void) unused;
+
+    CacheFiles();
+    NotifyScroller();
+    return NULL;
+}
+
 int InitTagSystem(void)
 {
     if (InitAllDirectory() < 0) {
@@ -291,19 +302,12 @@ int InitTagSystem(void)
     if (pthread_create(&tid, 0, WatchThread, NULL) != 0) {
         goto err;
     }
-    if (CacheFiles() < 0) {
-        goto err;
-    }
-    if (NotifyScroller() < 0) {
+    if (pthread_create(&tid, 0, CacheThread, NULL) != 0) {
         goto err;
     }
     return 0;
 
 err:
-    for (size_t i = 0; i < FileList.num; i++) {
-        Free(FileList.files[i].name);
-    }
-    Free(FileList.files);
     for (size_t i = 0; i < TagList.num; i++) {
         Free(TagList.tags[i].name);
     }

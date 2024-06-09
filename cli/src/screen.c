@@ -9,16 +9,17 @@
 struct mouse Mouse;
 Point Cursor;
 
+bool UIDirty;
+bool UIRunning;
+
 void SetCursor(int x, int y)
 {
     Cursor.x = x;
     Cursor.y = y;
-    curs_set(1);
 }
 
 void HideCursor(void)
 {
-    curs_set(0);
 }
 
 int InitScreen(void)
@@ -42,6 +43,7 @@ int InitScreen(void)
     raw();
     keypad(stdscr, true);
     nl();
+    timeout(80);
 
     mouseinterval(0);
     mousemask(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION, NULL);
@@ -57,17 +59,30 @@ void GetEvent(struct event *ev)
     static int pl, pc;
     MEVENT me;
 
-    move(Cursor.y, Cursor.x);
-    ev->key = getch();
-    if (pl != LINES && pc != COLS) {
-        RenderUI();
-        pl = LINES;
-        pc = COLS;
-    }
-    if (ev->key == KEY_RESIZE) {
-        return;
-    }
-    if (ev->key == KEY_MOUSE && getmouse(&me) == OK) {
+    RenderUI();
+    do {
+        move(Cursor.y, Cursor.x);
+        curs_set(1);
+        ev->key = getch();
+        curs_set(0);
+        if (pl != LINES && pc != COLS) {
+            UIDirty = true;
+            pl = LINES;
+            pc = COLS;
+        }
+        if (UIDirty) {
+            RenderUI();
+            UIDirty = false;
+        }
+    } while (ev->key == ERR);
+
+    switch (ev->key) {
+    case KEY_RESIZE:
+        break;
+    case KEY_MOUSE:
+        if (getmouse(&me) == ERR) {
+            break;
+        }
         Mouse.px = Mouse.x;
         Mouse.py = Mouse.y;
         Mouse.x = me.x;
@@ -110,8 +125,8 @@ void GetEvent(struct event *ev)
         default:
             ev->type = EV_MOUSEMOVE;
         }
-
-    } else {
+        break;
+    default:
         ev->type = EV_KEYDOWN;
     }
 }

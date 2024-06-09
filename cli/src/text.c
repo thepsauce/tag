@@ -86,7 +86,7 @@ int DrawText(WINDOW *win, struct text *text)
         return 1;
     }
 
-    /* get cursor position */
+    /* find cursor position */
     cur.x = 0;
     cur.y = 0;
     for (size_t i = 0;; ) {
@@ -102,27 +102,27 @@ int DrawText(WINDOW *win, struct text *text)
             text->cur.y = cur.y;
         }
 
+        if (!(text->flags & DT_ADJIND) && i > text->index) {
+            break;
+        }
+
         if (i == text->len) {
-            if (text->flags & DT_ADJIND) {
-                if (text->cur.y >= cur.y) {
-                    text->index = i;
-                    text->cur.x = cur.x;
-                    text->cur.y = cur.y;
-                    text->flags &= ~DT_ADJIND;
-                }
+            if ((text->flags & DT_ADJIND) && text->cur.y >= cur.y) {
+                text->index = i;
+                text->cur.x = cur.x;
+                text->cur.y = cur.y;
+                text->flags &= ~DT_ADJIND;
             }
             break;
         }
 
         const char ch = text->s[i];
         if (ch == '\n') {
-            if (text->flags & DT_ADJIND) {
-                if (text->cur.y <= cur.y) {
-                    text->index = i;
-                    text->cur.x = cur.x;
-                    text->cur.y = cur.y;
-                    text->flags &= ~DT_ADJIND;
-                }
+            if ((text->flags & DT_ADJIND) && text->cur.y <= cur.y) {
+                text->index = i;
+                text->cur.x = cur.x;
+                text->cur.y = cur.y;
+                text->flags &= ~DT_ADJIND;
             }
             cur.x = 0;
             cur.y++;
@@ -150,7 +150,7 @@ int DrawText(WINDOW *win, struct text *text)
                     cw = GlyphWidth(&text->s[i]);
                 }
             }
-            if (cur.x + cw > r.w) {
+            if (cur.x + cw > r.w && (text->flags & DT_WRAP)) {
                 if (text->flags & DT_ADJIND) {
                     if (text->cur.y <= cur.y) {
                         text->index = i;
@@ -161,14 +161,12 @@ int DrawText(WINDOW *win, struct text *text)
                 }
                 cur.x = cw;
                 cur.y++;
-            } else if (cur.x + cw == r.w) {
-                if (text->flags & DT_ADJIND) {
-                    if (text->cur.y <= cur.y) {
-                        text->index = i + l;
-                        text->cur.x = 0;
-                        text->cur.y = cur.y + 1;
-                        text->flags &= ~DT_ADJIND;
-                    }
+            } else if (cur.x + cw == r.w && (text->flags & DT_WRAP)) {
+                if ((text->flags & DT_ADJIND) && text->cur.y <= cur.y) {
+                    text->index = i + l;
+                    text->cur.x = 0;
+                    text->cur.y = cur.y + 1;
+                    text->flags &= ~DT_ADJIND;
                 }
                 cur.x = 0;
                 cur.y++;
@@ -218,24 +216,22 @@ int DrawText(WINDOW *win, struct text *text)
     }
 
     /* render text */
-    wattr_set(win, 0, 1, NULL);
+    wattr_set(win, 0, 0, NULL);
     cur.x = -text->scroll.x;
     cur.y = -text->scroll.y;
-    wmove(win, r.y + cur.y, r.x + cur.x);
-    for (size_t i = 0; i < text->len; ) {
+    for (size_t i = 0, l; i < text->len; i += l) {
         const char ch = text->s[i];
         char b[12];
-        size_t l = 0;
         int32_t cw;
 
         if (cur.y >= r.h) {
             break;
         }
 
-        wcolor_set(win, 1, NULL);
+        wcolor_set(win, 0, NULL);
         if (i >= minsel && i <= maxsel) {
             if (i == text->index) {
-                wcolor_set(win, 0, NULL);
+                wcolor_set(win, 1, NULL);
             } else {
                 wattr_on(win, A_REVERSE, NULL);
             }
@@ -244,18 +240,15 @@ int DrawText(WINDOW *win, struct text *text)
         }
 
         if (ch == '\n') {
-            if (cur.y >= 0) {
-                wattr_set(win, 0, 0, NULL);
-                wprintw(win, "%*s", r.w - cur.x, "");
-            }
             cur.x = 0;
             cur.y++;
             wmove(win, r.y + cur.y, r.x);
-            i++;
+            l = 1;
             continue;
         }
         if (ch == '\t') {
             cw = 0;
+            l = 0;
             do {
                 b[l++] = ' ';
                 cw++;
@@ -282,19 +275,17 @@ int DrawText(WINDOW *win, struct text *text)
                 cw = GlyphWidth(b);
             }
         }
-        if (cur.x + cw > r.w) {
+        if (cur.x + cw > r.w && (text->flags & DT_WRAP)) {
             cur.x = 0;
             cur.y++;
-            wmove(win, r.y + cur.y, r.x);
         }
-        if (cur.y >= r.h) {
+        if (cur.y >= r.h || cur.x + cw > r.w) {
             break;
         }
-        if (cur.y >= 0) {
-            waddstr(win, b);
+        if (cur.x >= 0 && cur.y >= 0) {
+            mvwaddstr(win, r.y + cur.y, r.x + cur.x, b);
         }
         cur.x += cw;
-        i += l;
     }
     if (text->len == text->index) {
         if (text->len >= minsel && text->len <= maxsel) {
@@ -302,7 +293,6 @@ int DrawText(WINDOW *win, struct text *text)
         } else {
             wcolor_set(win, 1, NULL);
         }
-        waddch(win, ' ');
     }
     return 0;
 }

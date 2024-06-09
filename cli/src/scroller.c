@@ -7,6 +7,48 @@
 
 struct scroller Scroller;
 
+void RenderScroller(void)
+{
+    struct text t;
+
+    memset(&t, 0, sizeof(t));
+    GetDialogRect(&t.r);
+    Scroller.height = t.r.h - 2;
+    attr_set(A_NORMAL, 0, NULL);
+    DrawBox(NULL, &t.r);
+    t.r.y++;
+    t.r.x++;
+    const int w = t.r.w - 2;
+    t.r.w = w / 2;
+    t.r.h = 1;
+    for (size_t i = Scroller.scroll; i < Scroller.scroll + Scroller.height; i++) {
+        if (i >= Scroller.num) {
+            break;
+        }
+        struct file *const f = &FileList.files[Scroller.rei[i]];
+        if (Scroller.index == i) {
+            attr_set(A_REVERSE, 0, NULL);
+            t.flags = DT_SEL;
+        } else {
+            attr_set(A_NORMAL, 0, NULL);
+        }
+        t.s = f->name;
+        t.len = strlen(t.s);
+        t.sel = t.len;
+        DrawText(stdscr, &t);
+        t.r.x += t.r.w;
+        t.r.w = w - t.r.w;
+        t.s = CompToString(f->tags);
+        t.len = strlen(t.s);
+        t.flags = 0;
+        DrawText(stdscr, &t);
+        t.r.w = w / 2;
+        t.r.x -= t.r.w;
+        t.r.y++;
+    }
+    mvprintw(LINES - 1, 0, "%zu", Scroller.num);
+}
+
 int NotifyScroller(void)
 {
     if (FileList.num > Scroller.cap) {
@@ -33,6 +75,7 @@ int NotifyScroller(void)
         }
         Scroller.num = FileList.num;
     }
+    UIDirty = true;
     return 0;
 }
 

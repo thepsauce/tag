@@ -85,7 +85,6 @@ int DrawText(WINDOW *win, struct text *text);
     _t.r = *(_r); \
     _t.s = (char*) (_s); \
     _t.flags = (f); \
-    _t.index = 0; \
     _t.len = strlen(_t.s); \
     DrawText(stdscr, &_t); \
 })

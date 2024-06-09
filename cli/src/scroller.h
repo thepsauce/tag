@@ -26,6 +26,7 @@ extern struct scroller {
     char *filter;
 } Scroller;
 
+void RenderScroller(void);
 int NotifyScroller(void);
 bool MoveScroller(size_t dy, int dir);
 

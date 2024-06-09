@@ -44,6 +44,9 @@ extern Point Cursor;
 void SetCursor(int x, int y);
 void HideCursor(void);
 
+extern bool UIDirty;
+extern bool UIRunning;
+
 enum color_pair {
     CP_RED = 1,
     CP_GREEN,
