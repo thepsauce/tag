@@ -21,10 +21,9 @@
 
 #define INSIDE_RECT(r, p) \
 ({ \
-    __auto_type _r = (r); \
-    __auto_type _p = (p); \
-    _p.x >= _r.x && _p.y >= _r.y && \
-        _p.x < _r.x + _r.w && _p.y < _r.y + _r.h; \
+    Rect *const _r = &(r); \
+    p.x >= _r->x && p.y >= _r->y && \
+        p.x < _r->x + _r->w && p.y < _r->y + _r->h; \
 })
 
 #endif

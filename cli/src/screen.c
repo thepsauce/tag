@@ -31,13 +31,8 @@ int InitScreen(void)
     curses_trace(TRACE_MAXIMUM);
 
     start_color();
-    init_pair(CP_RED, COLOR_RED, 0);
-    init_pair(CP_GREEN, COLOR_GREEN, 0);
-    init_pair(CP_YELLOW, COLOR_YELLOW, 0);
-    init_pair(CP_BLUE, COLOR_BLUE, 0);
-    init_pair(CP_MAGENTA, COLOR_MAGENTA, 0);
-    init_pair(CP_CYAN, COLOR_CYAN, 0);
-    init_pair(CP_GRAY, COLOR_WHITE, 0);
+    init_pair(CP_ALT1, COLOR_RED, 0);
+    init_pair(CP_ALT2, COLOR_BLUE, 0);
 
     noecho();
     raw();
@@ -154,7 +149,8 @@ int Dialog(const char *title, const char *format, ...)
         COLS / 5, LINES / 5,
         COLS * 3 / 5, LINES * 3 / 5
     };
-    DrawBox(title, &r);
+    DrawBox(&r);
+    DrawTitle(title, &r);
 
     /* for format */
     va_start(l, format);
@@ -171,7 +167,7 @@ int Dialog(const char *title, const char *format, ...)
         r.x + r.w / 5, r.y + r.h / 5,
         r.w * 4 / 5, r.h * 4 / 5
     };
-    DrawString(&tr, DT_WRAP | DT_TERM, msg);
+    DrawString(&tr, DT_WRAP | DT_UNDERL, msg);
 
     tr.x = r.x + 3;
     tr.y = r.y + r.h - 1;

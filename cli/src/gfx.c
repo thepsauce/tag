@@ -286,24 +286,24 @@ int AddPoint(struct stroke *st, Point pt)
 
 bool IsValidGlyph(const char *s, size_t l)
 {
-	if ((unsigned) s[0] <= 0x7f) {
-		return true;
-	}
-	if ((s[0] & 0xe0) == 0xc0) {
-		return l >= 2 && (s[1] & 0xc0) == 0x80;
-	}
-	if ((s[0] & 0xf0) == 0xe0) {
-		return l >= 3 &&
-			(s[1] & 0xc0) == 0x80 &&
-			(s[2] & 0xc0) == 0x80;
+    if ((unsigned) s[0] <= 0x7f) {
+        return true;
     }
-	if ((s[0] & 0xf8) == 0xf0) {
-		return l >= 4 &&
-			(s[1] & 0xc0) == 0x80 &&
-			(s[2] & 0xc0) == 0x80 &&
-			(s[3] & 0xc0) == 0x80;
-	}
-	return false;
+    if ((s[0] & 0xe0) == 0xc0) {
+        return l >= 2 && (s[1] & 0xc0) == 0x80;
+    }
+    if ((s[0] & 0xf0) == 0xe0) {
+        return l >= 3 &&
+            (s[1] & 0xc0) == 0x80 &&
+            (s[2] & 0xc0) == 0x80;
+    }
+    if ((s[0] & 0xf8) == 0xf0) {
+        return l >= 4 &&
+            (s[1] & 0xc0) == 0x80 &&
+            (s[2] & 0xc0) == 0x80 &&
+            (s[3] & 0xc0) == 0x80;
+    }
+    return false;
 }
 
 size_t GlyphByteCount(const char *s)
@@ -360,7 +360,63 @@ size_t ConvertDistance(const char *s, size_t n, size_t i, int dir, size_t a)
     return first - i;
 }
 
-void DrawBox(const char *title, Rect *r)
+void DrawTitle(const char *title, const Rect *r)
+{
+    Rect t;
+
+    t.x = r->x + 2;
+    t.y = r->y;
+    t.w = r->x + r->w - r->x - 3;
+    t.h = 1;
+
+    move(t.y, t.x);
+
+    int x = 0;
+    size_t c;
+    int w;
+    for (; *title != '\0'; title += c) {
+        const char ch = *title;
+        if (ch == '\n') {
+            break;
+        }
+
+        char b[12];
+        if (ch == '\t') {
+            w = 0;
+            do {
+                b[w++] = ' ';
+            } while ((x + w) % 4);
+            b[w] = '\0';
+            c = 1;
+        } else if (iscntrl(ch)) {
+            b[0] = '^';
+            b[1] = ch == 0x7f ? '?' : ch + 'A' - 1;
+            b[2] = '\0';
+            c = 1;
+            w = 2;
+        } else {
+            if (!IsValidGlyph(title, strlen(title))) {
+                c = 1;
+                b[0] = '^';
+                b[1] = '?';
+                b[2] = '\0';
+                w = 2;
+            } else {
+                c = GlyphByteCount(title);
+                memcpy(b, title, c);
+                b[c] = '\0';
+                w = GlyphWidth(b);
+            }
+        }
+
+        if (x + w > t.w) {
+            break;
+        }
+        addstr(b);
+    }
+}
+
+void DrawBox(const Rect *r)
 {
     /* draw border */
     mvhline(r->y, r->x, ACS_HLINE, r->w);
@@ -372,18 +428,6 @@ void DrawBox(const char *title, Rect *r)
     mvaddch(r->y, r->x + r->w - 1, ACS_URCORNER);
     mvaddch(r->y + r->h - 1, r->x, ACS_LLCORNER);
     mvaddch(r->y + r->h - 1, r->x + r->w - 1, ACS_LRCORNER);
-    /* draw title */
-    if (title != NULL) {
-        Rect t;
-        char b[strlen(title) + 2];
-
-        t.x = r->x + 2;
-        t.y = r->y;
-        t.w = r->x + r->w - r->x - 3;
-        t.h = 1;
-        sprintf(b, " %s ", title);
-        DrawString(&t, DT_TERM, b);
-    }
     /* erase content */
     for (int y = 1; y < r->h - 1; y++) {
         for (int x = 1; x < r->w - 1; x++) {

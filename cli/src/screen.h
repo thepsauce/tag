@@ -48,13 +48,9 @@ extern bool UIDirty;
 extern bool UIRunning;
 
 enum color_pair {
-    CP_RED = 1,
-    CP_GREEN,
-    CP_YELLOW,
-    CP_BLUE,
-    CP_MAGENTA,
-    CP_CYAN,
-    CP_GRAY,
+    CP_NORMAL,
+    CP_ALT1,
+    CP_ALT2,
 };
 
 int InitScreen(void);

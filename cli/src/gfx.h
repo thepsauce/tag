@@ -7,17 +7,6 @@
 #define TRACE
 #include <ncurses.h>
 
-#define DT_TERM 0x1
-#define DT_WRAP 0x2
-#define DT_DRY 0x4
-#define DT_ADJCUR 0x8
-#define DT_ADJIND 0x10
-#define DT_ADJSEL 0x20
-#define DT_SEL 0x40
-#define DT_DRAWBOX 0x80
-#define DT_SCROLL 0x100
-#define DT_ADJVCT 0x200
-
 /*
  * utf8 helper functions
  */
@@ -43,6 +32,27 @@ size_t GlyphByteCountR(const char *s);
 int GlyphWidth(const char *s);
 
 size_t ConvertDistance(const char *s, size_t n, size_t i, int dir, size_t a);
+
+/* intepret an _ as highlighting the next letter */
+#define DT_UNDERL 0x1
+/* when x would overflow the width, wrap to the next line */
+#define DT_WRAP 0x2
+/* adjust the cursor based on the x, y position */
+#define DT_ADJIND 0x10
+/* start a selection */
+#define DT_ADJSEL 0x20
+/* draw a selection (set by DT_ADJSEL) */
+#define DT_SEL 0x40
+/* draw a box around the text */
+#define DT_DRAWBOX 0x80
+/* if the title should be bold */
+#define DT_TBOLD 0x100
+/* if the title should intepret _ */
+#define DT_TUNDERL 0x200
+/* if the vertical column tracker should be updated */
+#define DT_ADJVCT 0x400
+/* enables special interpretation of / (alternating color) */
+#define DT_SLASH 0x800
 
 struct text {
     int flags;
@@ -74,9 +84,6 @@ size_t DeleteBytes(struct text *text, int dir, size_t amount);
 size_t DeleteGlyphs(struct text *text, int dir, size_t amount);
 size_t MoveTextCursor(struct text *text, int dir, size_t amount);
 
-/*
- * also takes DT_WRAP as flag to wrap text
- */
 int DrawText(WINDOW *win, struct text *text);
 #define DrawString(_r, f, _s) \
 ({ \
@@ -88,18 +95,6 @@ int DrawText(WINDOW *win, struct text *text);
     _t.len = strlen(_t.s); \
     DrawText(stdscr, &_t); \
 })
-
-/* --- --- --- --- ---
- * Dollar sequences
- * $r - Change attribute to red
- * $a - Attribute from va_args
- * $0 - Reset attributes
- *
- * More options instead of r:
- * $r red, $g green, $b blue, $c cyan, $y yellow, $m magenta,
- * $d bold, $i italic
- * --- --- --- --- ---
- */
 
 /*
  * a paint brush
@@ -190,6 +185,7 @@ void DrawLine(WINDOW *win, const cchar_t *cc, int width, int x1, int y1, int x2,
  * coordinates. The title is drawn at the top left and the inside of the
  * rectangle is cleared
  */
-void DrawBox(const char *title, Rect *r);
+void DrawBox(const Rect *r);
+void DrawTitle(const char *title, const Rect *r);
 
 #endif

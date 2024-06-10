@@ -328,8 +328,7 @@ char *CompToString(uint8_t *comp)
         while (c) {
             if (c & 0x1) {
                 if (n > 0) {
-                    buf[n++] = ',';
-                    buf[n++] = ' ';
+                    buf[n++] = '/';
                 }
 
                 const char *const name = TagList.tags[id].name;
@@ -343,6 +342,30 @@ char *CompToString(uint8_t *comp)
     }
     buf[n] = '\0';
     return buf;
+}
+
+uint8_t *StringToComp(const char *s)
+{
+    const size_t cs = COMP_SIZE();
+    uint8_t empty[cs];
+    uint8_t *comp;
+    memset(empty, 0, cs);
+    comp = empty;
+    while (*s != '\0') {
+        const char *e = s;
+        while (*e != '/' && *e != '\0') {
+            e++;
+        }
+        const size_t id = TAG_ID_L(s, e - s);
+        if (id != TagList.num) {
+            comp = AddComposition(comp, id);
+        }
+        if (*e == '\0') {
+            break;
+        }
+        s = e + 1;
+    }
+    return comp;
 }
 
 uint8_t *AddComposition(uint8_t *prev, size_t tagid)

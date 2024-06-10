@@ -77,7 +77,13 @@ int DrawText(WINDOW *win, struct text *text)
 
     r = text->r;
     if (text->flags & DT_DRAWBOX) {
-        DrawBox(text->t, &r);
+        DrawBox(&r);
+        if (text->t != NULL) {
+            if (text->flags & DT_TBOLD) {
+                wattr_on(win, A_BOLD, NULL);
+            }
+            DrawTitle(text->t, &r);
+        }
         r.x++;
         r.y++;
         r.w -= 2;
@@ -225,6 +231,7 @@ int DrawText(WINDOW *win, struct text *text)
     wattr_set(win, 0, 0, NULL);
     cur.x = -text->scroll.x;
     cur.y = -text->scroll.y;
+    int color = (text->flags & DT_SLASH) ? CP_ALT1 : CP_NORMAL;
     for (size_t i = 0, l; i < text->len; i += l) {
         const char ch = text->s[i];
 
@@ -232,13 +239,9 @@ int DrawText(WINDOW *win, struct text *text)
             break;
         }
 
-        wcolor_set(win, 0, NULL);
+        wcolor_set(win, color, NULL);
         if (i >= minsel && i <= maxsel) {
-            if (i == text->index) {
-                wcolor_set(win, 1, NULL);
-            } else {
-                wattr_on(win, A_REVERSE, NULL);
-            }
+            wattr_on(win, A_REVERSE, NULL);
         } else {
             wattr_off(win, A_REVERSE, NULL);
         }
@@ -254,19 +257,22 @@ int DrawText(WINDOW *win, struct text *text)
         }
 
         char b[12];
-        if (ch == '\t') {
-            cw = 0;
+        if (ch == '/' && (text->flags & DT_SLASH)) {
+            color = (CP_ALT1 | CP_ALT2) ^ color;
+            b[0] = '\0';
+        } else if (ch == '\t') {
             l = 0;
+            cw = 0;
             do {
                 b[l++] = ' ';
                 cw++;
             } while ((cur.x + l) % 4);
-            b[l] = 0;
+            b[l] = '\0';
             l = 1;
         } else if (iscntrl(ch)) {
             b[0] = '^';
             b[1] = ch == 0x7f ? '?' : ch + 'A' - 1;
-            b[2] = 0;
+            b[2] = '\0';
             l = 1;
             cw = 2;
         } else {
@@ -274,12 +280,12 @@ int DrawText(WINDOW *win, struct text *text)
                 l = 1;
                 b[0] = '^';
                 b[1] = '?';
-                b[2] = 0;
+                b[2] = '\0';
                 cw = 2;
             } else {
                 l = GlyphByteCount(&text->s[i]);
                 memcpy(b, &text->s[i], l);
-                b[l] = 0;
+                b[l] = '\0';
                 cw = GlyphWidth(b);
             }
         }
@@ -295,14 +301,6 @@ int DrawText(WINDOW *win, struct text *text)
             mvwaddstr(win, r.y + cur.y, r.x + cur.x, b);
         }
         cur.x += cw;
-    }
-
-    if (text->len == text->index) {
-        if (text->len >= minsel && text->len <= maxsel) {
-            wcolor_set(win, 0, NULL);
-        } else {
-            wcolor_set(win, 1, NULL);
-        }
     }
     return 0;
 }

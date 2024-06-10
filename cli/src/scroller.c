@@ -1,7 +1,8 @@
+#include "macros.h"
 #include "tag.h"
 #include "scroller.h"
 #include "screen.h"
-#include "input.h"
+#include "controls.h"
 
 #include <fnmatch.h>
 #include <string.h>
@@ -13,10 +14,10 @@ void RenderScroller(void)
     struct text t;
 
     memset(&t, 0, sizeof(t));
-    GetDialogRect(&t.r);
+    t.r = (Rect) { 0, 0, COLS / 2, LINES };
     Scroller.height = t.r.h - 2;
     attr_set(A_NORMAL, 0, NULL);
-    DrawBox(NULL, &t.r);
+    DrawBox(&t.r);
     t.r.y++;
     t.r.x++;
     const int w = t.r.w - 2;
@@ -32,6 +33,7 @@ void RenderScroller(void)
             t.flags = DT_SEL;
         } else {
             attr_set(A_NORMAL, 0, NULL);
+            t.flags = 0;
         }
         t.s = f->name;
         t.len = strlen(t.s);
@@ -41,13 +43,34 @@ void RenderScroller(void)
         t.r.w = w - t.r.w;
         t.s = CompToString(f->tags);
         t.len = strlen(t.s);
-        t.flags = 0;
+        t.flags = DT_SLASH;
         DrawText(stdscr, &t);
         t.r.w = w / 2;
         t.r.x -= t.r.w;
         t.r.y++;
     }
     mvprintw(LINES - 1, 0, "%zu", Scroller.num);
+}
+
+static void SetIndex(size_t index)
+{
+    Scroller.index = index;
+    if (Scroller.num > 0) {
+        free(TagEdit.s);
+        TagEdit.s = strdup(CompToString(FileList.files[Scroller.rei[Scroller.index]].tags));
+        if (TagEdit.s == NULL) {
+            TagEdit.len = 0;
+            TagEdit.cap = 0;
+        } else {
+            TagEdit.len = strlen(TagEdit.s);
+            TagEdit.cap = TagEdit.len;
+        }
+    }
+    if (Scroller.index < Scroller.scroll) {
+        Scroller.scroll = Scroller.index;
+    } else if (Scroller.index >= Scroller.scroll + Scroller.height) {
+        Scroller.scroll = Scroller.index - Scroller.height + 1;
+    }
 }
 
 int NotifyScroller(void)
@@ -61,26 +84,48 @@ int NotifyScroller(void)
         }
         Scroller.rei = v;
     }
-    if (Input.text.s != NULL) {
-        char filter[Input.text.len + 3];
-        filter[0] = '*';
-        memcpy(&filter[1], Input.text.s, Input.text.len);
-        filter[Input.text.len + 1] = '*';
-        filter[Input.text.len + 2] = '\0';
-        Scroller.num = 0;
-        for (size_t i = 0; i < FileList.num; i++) {
-            char *const name = FileList.files[i].name;
-            if (fnmatch(filter, name, FNM_NOESCAPE) == 0) {
-                Scroller.rei[Scroller.num++] = i;
+
+    char ffilter[FileFilter.len + 3];
+    ffilter[0] = '*';
+    memcpy(&ffilter[1], FileFilter.s, FileFilter.len);
+    ffilter[FileFilter.len + 1] = '*';
+    ffilter[FileFilter.len + 2] = '\0';
+
+    Scroller.num = 0;
+    //const size_t s = COMP_SIZE();
+    for (size_t i = 0; i < FileList.num; i++) {
+        char *const name = FileList.files[i].name;
+        bool tm = false, fm = false;
+        if (fnmatch(ffilter, name, FNM_NOESCAPE) == 0) {
+            tm = true;
+        }
+        /*for (size_t j = 0; j < s; j++) {
+            uint8_t c = FileList.files[i].tags[j];
+            size_t id = j * 8;
+            while (c) {
+                if ((c & 0x1) && fnmatch(tfilter, TagList.tags[id].name,
+                            FNM_NOESCAPE) == 0) {
+                    fm = true;
+                    break;
+                }
+                c >>= 1;
+                id++;
             }
+            if (fm) {
+                break;
+            }
+        }*/
+        fm = true;
+        if (tm && fm) {
+            Scroller.rei[Scroller.num++] = i;
         }
-    } else {
-        for (size_t i = 0; i < FileList.num; i++) {
-            Scroller.rei[i] = i;
-        }
-        Scroller.num = FileList.num;
     }
-    UIDirty = true;
+
+    if (Scroller.num == 0) {
+        SetIndex(0);
+    } else {
+        SetIndex(MIN(Scroller.index, Scroller.num - 1));
+    }
     return 0;
 }
 
@@ -93,7 +138,7 @@ bool MoveScroller(size_t dy, int dir)
         if (dy == 0) {
             return false;
         }
-        Scroller.index -= dy;
+        SetIndex(Scroller.index - dy);
     } else {
         if (dy >= Scroller.num - Scroller.index) {
             dy = Scroller.num - Scroller.index - 1;
@@ -101,7 +146,7 @@ bool MoveScroller(size_t dy, int dir)
         if (dy == 0) {
             return false;
         }
-        Scroller.index += dy;
+        SetIndex(Scroller.index + dy);
     }
     if (Scroller.index < Scroller.scroll) {
         Scroller.scroll = Scroller.index;

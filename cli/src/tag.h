@@ -28,7 +28,21 @@ extern struct tag_list {
     const char *const _n = (name); \
     size_t _id; \
     for (_id = 0; _id < TagList.num; _id++) { \
-        if (strcmp(TagList.tags[_id], _n) == 0) { \
+        if (strcmp(TagList.tags[_id].name, _n) == 0) { \
+            break; \
+        } \
+    } \
+    _id; \
+})
+
+#define TAG_ID_L(_name, len) \
+({ \
+    const char *const _n = (_name); \
+    const size_t _l = (len); \
+    size_t _id; \
+    for (_id = 0; _id < TagList.num; _id++) { \
+        const char *const _o = TagList.tags[_id].name; \
+        if (strncmp(_o, _n, _l) == 0 && _o[_l] == '\0') { \
             break; \
         } \
     } \
@@ -75,6 +89,7 @@ extern struct tag_list {
 int InitTagSystem(void);
 int CacheTags(void);
 char *CompToString(uint8_t *comp);
+uint8_t *StringToComp(const char *s);
 uint8_t *AddComposition(uint8_t *prev, size_t tagid);
 
 struct file {
