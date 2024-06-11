@@ -7,20 +7,10 @@
 #include <stdlib.h>
 
 struct mouse Mouse;
-Point Cursor;
+Point Cursor = { -1, 0 };
 
 bool UIDirty;
 bool UIRunning;
-
-void SetCursor(int x, int y)
-{
-    Cursor.x = x;
-    Cursor.y = y;
-}
-
-void HideCursor(void)
-{
-}
 
 int InitScreen(void)
 {
@@ -33,6 +23,7 @@ int InitScreen(void)
     start_color();
     init_pair(CP_ALT1, COLOR_RED, 0);
     init_pair(CP_ALT2, COLOR_BLUE, 0);
+    init_pair(CP_FOCUS, COLOR_RED, 0);
 
     noecho();
     raw();
@@ -57,7 +48,9 @@ void GetEvent(struct event *ev)
     RenderUI();
     do {
         move(Cursor.y, Cursor.x);
-        curs_set(1);
+        if (Cursor.x >= 0) {
+            curs_set(1);
+        }
         ev->key = getch();
         curs_set(0);
         if (pl != LINES && pc != COLS) {
@@ -69,15 +62,12 @@ void GetEvent(struct event *ev)
             RenderUI();
             UIDirty = false;
         }
-    } while (ev->key == ERR);
+    } while (ev->key == ERR || (ev->key == KEY_MOUSE && getmouse(&me) == ERR));
 
     switch (ev->key) {
     case KEY_RESIZE:
         break;
     case KEY_MOUSE:
-        if (getmouse(&me) == ERR) {
-            break;
-        }
         Mouse.px = Mouse.x;
         Mouse.py = Mouse.y;
         Mouse.x = me.x;

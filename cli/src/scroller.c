@@ -16,7 +16,11 @@ void RenderScroller(void)
     memset(&t, 0, sizeof(t));
     t.r = (Rect) { 0, 0, COLS / 2, LINES };
     Scroller.height = t.r.h - 2;
-    attr_set(A_NORMAL, 0, NULL);
+    if (Focused == NULL) {
+        attr_set(A_NORMAL, CP_FOCUS, NULL);
+    } else {
+        attr_set(A_NORMAL, CP_NORMAL, NULL);
+    }
     DrawBox(&t.r);
     t.r.y++;
     t.r.x++;
@@ -65,7 +69,10 @@ static void SetIndex(size_t index)
             TagEdit.len = strlen(TagEdit.s);
             TagEdit.cap = TagEdit.len;
         }
+        TagEdit.index = TagEdit.len;
+        TagEdit.flags |= DT_ADJVCT;
     }
+
     if (Scroller.index < Scroller.scroll) {
         Scroller.scroll = Scroller.index;
     } else if (Scroller.index >= Scroller.scroll + Scroller.height) {
@@ -91,31 +98,19 @@ int NotifyScroller(void)
     ffilter[FileFilter.len + 1] = '*';
     ffilter[FileFilter.len + 2] = '\0';
 
+    const uint8_t *tfilter = TagFilter.s == NULL ? NULL : StringToComp(TagFilter.s);
+
     Scroller.num = 0;
-    //const size_t s = COMP_SIZE();
     for (size_t i = 0; i < FileList.num; i++) {
         char *const name = FileList.files[i].name;
         bool tm = false, fm = false;
         if (fnmatch(ffilter, name, FNM_NOESCAPE) == 0) {
             tm = true;
         }
-        /*for (size_t j = 0; j < s; j++) {
-            uint8_t c = FileList.files[i].tags[j];
-            size_t id = j * 8;
-            while (c) {
-                if ((c & 0x1) && fnmatch(tfilter, TagList.tags[id].name,
-                            FNM_NOESCAPE) == 0) {
-                    fm = true;
-                    break;
-                }
-                c >>= 1;
-                id++;
-            }
-            if (fm) {
-                break;
-            }
+        /*if (tfilter == NULL || CONTAINS_TAGS(FileList.files[i].tags, tfilter)) {
+            fm = true;
+            break;
         }*/
-        fm = true;
         if (tm && fm) {
             Scroller.rei[Scroller.num++] = i;
         }

@@ -6,6 +6,7 @@
 
 #include <ctype.h>
 #include <string.h>
+#include <unistd.h>
 
 struct text TagFilter;
 struct text FileFilter;
@@ -156,9 +157,20 @@ int TextHandle(struct text *text, struct event *ev)
 void ControlsHandle(struct event *ev)
 {
     switch (ev->type) {
+        size_t i;
+    case EV_LBUTTONDOWN:
+        for (i = 0; i < ARRAY_SIZE(Inputs); i++) {
+            if (INSIDE_RECT(Inputs[i]->r, Mouse)) {
+                Focused = Inputs[i];
+                break;
+            }
+        }
+        if (i == ARRAY_SIZE(Inputs)) {
+            Focused = NULL;
+        }
+        break;
     case EV_KEYDOWN:
         switch (ev->key) {
-            size_t i;
         case '\t':
             if (Focused == NULL) {
                 Focused = Inputs[0];
@@ -181,20 +193,39 @@ void ControlsHandle(struct event *ev)
     }
     if (Focused == NULL) {
         switch (ev->type) {
-        case EV_LBUTTONDOWN:
-            for (size_t i = 0; i < ARRAY_SIZE(Inputs); i++) {
-                if (INSIDE_RECT(Inputs[i]->r, Mouse)) {
-                    Focused = Inputs[i];
-                    break;
-                }
-            }
-            break;
         case EV_KEYDOWN:
             for (size_t i = 0; i < ARRAY_SIZE(Inputs); i++) {
                 if (tolower(ev->key) == Binds[i]) {
                     Focused = Inputs[i];
                     break;
                 }
+            }
+            switch (ev->key) {
+                case 'k':
+                    MoveScroller(1, -1);
+                    break;
+                case 'j':
+                    MoveScroller(1, 1);
+                    break;
+                case 'g':
+                    MoveScroller(SIZE_MAX, -1);
+                    break;
+                case 'G':
+                    MoveScroller(SIZE_MAX, 1);
+                    break;
+                case '\n': {
+                    if (Scroller.num == 0) {
+                        break;
+                    }
+                    struct file *const file = &FileList.files[Scroller.rei[Scroller.index]];
+                    if (fork() == 0) {
+                        execl("/usr/bin/feh", "feh", GetFilePath(file->name), NULL);
+                    }
+                    break;
+                }
+                case 'q':
+                    UIRunning = false;
+                    break;
             }
             break;
         default:
@@ -209,14 +240,21 @@ void ControlsHandle(struct event *ev)
 
 void RenderControls(void)
 {
-    attr_set(0, 0, NULL);
     for (size_t i = 0; i < ARRAY_SIZE(Inputs); i++) {
         if (Inputs[i] == Focused) {
             Inputs[i]->flags |= DT_TBOLD;
+            attr_set(A_NORMAL, CP_FOCUS, NULL);
         } else {
             Inputs[i]->flags &= ~DT_TBOLD;
+            attr_set(A_NORMAL, CP_NORMAL, NULL);
         }
         DrawText(stdscr, Inputs[i]);
+    }
+    if (Focused == NULL) {
+        Cursor.x = -1;
+    } else {
+        Cursor.x = Focused->r.x + 1 + Focused->cur.x;
+        Cursor.y = Focused->r.y + 1 + Focused->cur.y;
     }
 }
 

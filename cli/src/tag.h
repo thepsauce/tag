@@ -51,14 +51,28 @@ extern struct tag_list {
 
 #define COMP_SIZE() ((TagList.num + TagList.num % 8) / 8)
 
-#define COMP_CONTAINS(c, co) \
+#define CONTAINS_TAGS(c, co) \
 ({ \
-    const uint8_t *_c = (c); \
-    const uint8_t *_o = (co); \
+    const uint8_t *const _c = (c); \
+    const uint8_t *const _o = (co); \
     const size_t _s = COMP_SIZE(); \
     size_t _i; \
     for (_i = 0; _i < _s; _i++) { \
         if ((_c[_i] & _o[_i]) != _o[_i]) { \
+            break; \
+        } \
+    } \
+    _i == _s; \
+})
+
+#define HAS_TAGS(c, co) \
+({ \
+    const uint8_t *const _c = (c); \
+    const uint8_t *const _o = (co); \
+    const size_t _s = COMP_SIZE(); \
+    size_t _i; \
+    for (_i = 0; _i < _s; _i++) { \
+        if (_c[_i] != _o[_i]) { \
             break; \
         } \
     } \

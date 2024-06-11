@@ -259,7 +259,9 @@ int DrawText(WINDOW *win, struct text *text)
         char b[12];
         if (ch == '/' && (text->flags & DT_SLASH)) {
             color = (CP_ALT1 | CP_ALT2) ^ color;
-            b[0] = '\0';
+            wcolor_set(win, CP_NORMAL, NULL);
+            b[0] = '/';
+            b[1] = '\0';
         } else if (ch == '\t') {
             l = 0;
             cw = 0;

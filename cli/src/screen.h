@@ -41,9 +41,6 @@ extern struct mouse {
 
 extern Point Cursor;
 
-void SetCursor(int x, int y);
-void HideCursor(void);
-
 extern bool UIDirty;
 extern bool UIRunning;
 
@@ -51,6 +48,7 @@ enum color_pair {
     CP_NORMAL,
     CP_ALT1,
     CP_ALT2,
+    CP_FOCUS,
 };
 
 int InitScreen(void);

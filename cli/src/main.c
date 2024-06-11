@@ -4,8 +4,8 @@
 #include "controls.h"
 #include "scroller.h"
 
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 
 int RunUI(void)
 {
@@ -16,41 +16,7 @@ int RunUI(void)
     UIRunning = true;
     while (UIRunning) {
         GetEvent(&ev);
-        switch (ev.type) {
-        case EV_KEYDOWN:
-            ControlsHandle(&ev);
-            if (Focused == NULL) {
-                switch (ev.key) {
-                case 'k':
-                    MoveScroller(1, -1);
-                    break;
-                case 'j':
-                    MoveScroller(1, 1);
-                    break;
-                case 'g':
-                    MoveScroller(SIZE_MAX, -1);
-                    break;
-                case 'G':
-                    MoveScroller(SIZE_MAX, 1);
-                    break;
-                case '\n': {
-                    if (Scroller.num == 0) {
-                        break;
-                    }
-                    struct file *const file = &FileList.files[Scroller.rei[Scroller.index]];
-                    if (fork() == 0) {
-                        execl("/usr/bin/feh", "feh", GetFilePath(file->name), NULL);
-                    }
-                    break;
-                }
-                case 'q':
-                    UIRunning = false;
-                    break;
-                }
-            }
-            break;
-        default:
-        }
+        ControlsHandle(&ev);
     }
     return 0;
 }
