@@ -39,6 +39,14 @@ void InitControls(void)
     TagEdit.flags |= DT_SLASH;
 }
 
+static int CharGroup(char ch)
+{
+    if ((ch >= 0 && ch <= ' ') || ch == '/') {
+        return 0;
+    }
+    return 1;
+}
+
 int TextHandle(struct text *text, struct event *ev)
 {
     if (ev->type != EV_KEYDOWN) {
@@ -62,24 +70,25 @@ int TextHandle(struct text *text, struct event *ev)
     }
 
     switch (key) {
-        bool sp;
+        int g;
         size_t i;
-    case '\x1b':
-    case CONTROL('C'):
-        Focused = NULL;
-        break;
     case '\n':
-        if (Focused == &TagEdit && Scroller.num > 0) {
-            FileList.files[Scroller.rei[Scroller.index]].tags = StringToComp(TagEdit.s);
+        if (text == &TagEdit && Scroller.num > 0) {
+            struct file *const f = &FileList.files[Scroller.rei[Scroller.index]];
+            f->archid = StringToArch(text->s);
+            SetTags(f);
         }
+        /* fall through */
+    case '\x1b':
+        Focused = NULL;
         break;
     case CONTROL('W'):
         if (text->index == text->len) {
             break;
         }
-        sp = !!isspace(text->s[text->index]);
+        g = CharGroup(text->s[text->index]);
         for (text->index++; text->index < text->len; text->index++) {
-            if (sp != !!isspace(text->s[text->index])) {
+            if (g != CharGroup(text->s[text->index])) {
                 break;
             }
         }
@@ -89,9 +98,9 @@ int TextHandle(struct text *text, struct event *ev)
         if (text->index == 0) {
             break;
         }
-        sp = !!isspace(text->s[--text->index]);
+        g = CharGroup(text->s[--text->index]);
         for (; text->index > 0; text->index--) {
-            if (sp != !!isspace(text->s[text->index - 1])) {
+            if (g != CharGroup(text->s[text->index - 1])) {
                 break;
             }
         }
@@ -103,9 +112,9 @@ int TextHandle(struct text *text, struct event *ev)
             break;
         }
         i = text->index;
-        sp = !!isspace(text->s[--i]);
+        g = CharGroup(text->s[--i]);
         for (; i > 0; i--) {
-            if (sp != !!isspace(text->s[i - 1])) {
+            if (g != CharGroup(text->s[i - 1])) {
                 break;
             }
         }
@@ -116,9 +125,9 @@ int TextHandle(struct text *text, struct event *ev)
             break;
         }
         i = text->index;
-        sp = !!isspace(text->s[i]);
+        g = CharGroup(text->s[i]);
         for (i++; i < text->len; i++) {
-            if (sp != !!isspace(text->s[i])) {
+            if (g != CharGroup(text->s[i])) {
                 break;
             }
         }
@@ -171,6 +180,9 @@ void ControlsHandle(struct event *ev)
         break;
     case EV_KEYDOWN:
         switch (ev->key) {
+        case CONTROL('C'):
+            UIRunning = false;
+            return;
         case '\t':
             if (Focused == NULL) {
                 Focused = Inputs[0];

@@ -46,6 +46,7 @@ size_t DeleteBytes(struct text *text, int dir, size_t amount)
         text->index -= amount;
     }
     text->len -= amount;
+    text->s[text->len] = '\0';
 
     text->flags |= DT_ADJVCT;
     return amount;

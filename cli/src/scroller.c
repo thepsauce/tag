@@ -40,12 +40,12 @@ void RenderScroller(void)
             t.flags = 0;
         }
         t.s = f->name;
-        t.len = strlen(t.s);
+        t.len = strlen(f->name);
         t.sel = t.len;
         DrawText(stdscr, &t);
         t.r.x += t.r.w;
         t.r.w = w - t.r.w;
-        t.s = CompToString(f->tags);
+        t.s = ArchToString(f->archid);
         t.len = strlen(t.s);
         t.flags = DT_SLASH;
         DrawText(stdscr, &t);
@@ -53,7 +53,9 @@ void RenderScroller(void)
         t.r.x -= t.r.w;
         t.r.y++;
     }
-    mvprintw(LINES - 1, 0, "%zu", Scroller.num);
+    attr_set(A_NORMAL, 0, NULL);
+    mvprintw(LINES - 1, 2, "%zu/%zu (%d%%)", Scroller.index + 1, Scroller.num,
+            Scroller.num == 0 ? 100 : (int) (100 * (Scroller.index + 1) / Scroller.num));
 }
 
 static void SetIndex(size_t index)
@@ -61,7 +63,7 @@ static void SetIndex(size_t index)
     Scroller.index = index;
     if (Scroller.num > 0) {
         free(TagEdit.s);
-        TagEdit.s = strdup(CompToString(FileList.files[Scroller.rei[Scroller.index]].tags));
+        TagEdit.s = strdup(ArchToString(FileList.files[Scroller.rei[Scroller.index]].archid));
         if (TagEdit.s == NULL) {
             TagEdit.len = 0;
             TagEdit.cap = 0;
@@ -84,12 +86,12 @@ int NotifyScroller(void)
 {
     if (FileList.num > Scroller.cap) {
         Scroller.cap = FileList.num;
-        size_t *const v = Realloc(Scroller.rei,
+        size_t *const p = Realloc(Scroller.rei,
                 sizeof(*Scroller.rei) * Scroller.cap);
-        if (v == NULL) {
+        if (p == NULL) {
             return -1;
         }
-        Scroller.rei = v;
+        Scroller.rei = p;
     }
 
     char ffilter[FileFilter.len + 3];
@@ -98,7 +100,7 @@ int NotifyScroller(void)
     ffilter[FileFilter.len + 1] = '*';
     ffilter[FileFilter.len + 2] = '\0';
 
-    const uint8_t *tfilter = TagFilter.s == NULL ? NULL : StringToComp(TagFilter.s);
+    const size_t tfilter = TagFilter.s == NULL ? SIZE_MAX : StringToArch(TagFilter.s);
 
     Scroller.num = 0;
     for (size_t i = 0; i < FileList.num; i++) {
@@ -107,10 +109,9 @@ int NotifyScroller(void)
         if (fnmatch(ffilter, name, FNM_NOESCAPE) == 0) {
             tm = true;
         }
-        /*if (tfilter == NULL || CONTAINS_TAGS(FileList.files[i].tags, tfilter)) {
+        if (tfilter == SIZE_MAX || CONTAINS_TAGS(FileList.files[i].archid, tfilter)) {
             fm = true;
-            break;
-        }*/
+        }
         if (tm && fm) {
             Scroller.rei[Scroller.num++] = i;
         }
@@ -121,6 +122,7 @@ int NotifyScroller(void)
     } else {
         SetIndex(MIN(Scroller.index, Scroller.num - 1));
     }
+    UIDirty = true;
     return 0;
 }
 

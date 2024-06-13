@@ -3,8 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <time.h>
 #include <pthread.h>
+#include <sys/stat.h>
 
 extern const char *Default;
 
@@ -19,13 +19,13 @@ extern struct tag_list {
     struct tag *tags;
     size_t all;
     size_t num, cap;
-    uint8_t **comps;
-    size_t compn;
+    uint8_t **archs;
+    size_t archn;
 } TagList;
 
-#define TAG_ID(name) \
+#define TAG_ID(_name) \
 ({ \
-    const char *const _n = (name); \
+    const char *const _n = (_name); \
     size_t _id; \
     for (_id = 0; _id < TagList.num; _id++) { \
         if (strcmp(TagList.tags[_id].name, _n) == 0) { \
@@ -49,69 +49,73 @@ extern struct tag_list {
     _id; \
 })
 
-#define COMP_SIZE() ((TagList.num + TagList.num % 8) / 8)
+#define ARCH_SIZE() (TagList.num / 8 + 1)
 
-#define CONTAINS_TAGS(c, co) \
+#define CONTAINS_TAGS(a, ao) \
 ({ \
-    const uint8_t *const _c = (c); \
-    const uint8_t *const _o = (co); \
-    const size_t _s = COMP_SIZE(); \
+    const uint8_t *const _a = TagList.archs[a]; \
+    const uint8_t *const _o = TagList.archs[ao]; \
+    const size_t _s = ARCH_SIZE(); \
     size_t _i; \
     for (_i = 0; _i < _s; _i++) { \
-        if ((_c[_i] & _o[_i]) != _o[_i]) { \
+        if ((_a[_i] & _o[_i]) != _o[_i]) { \
             break; \
         } \
     } \
     _i == _s; \
 })
 
-#define HAS_TAGS(c, co) \
+#define HAS_TAGS(a, ao) \
 ({ \
-    const uint8_t *const _c = (c); \
-    const uint8_t *const _o = (co); \
-    const size_t _s = COMP_SIZE(); \
+    const uint8_t *const _a = TagList.archs[a]; \
+    const uint8_t *const _o = TagList.archs[ao]; \
+    const size_t _s = ARCH_SIZE(); \
     size_t _i; \
     for (_i = 0; _i < _s; _i++) { \
-        if (_c[_i] != _o[_i]) { \
+        if (_a[_i] != _o[_i]) { \
             break; \
         } \
     } \
     _i == _s; \
 })
 
-#define ADD_TAG(c, i) \
+#define ADD_TAG(a, i) \
 ({ \
-    uint8_t *const _c = (c); \
+    uint8_t *const _a = TagList.archs[a]; \
     const size_t _i = (i); \
-    _c[_i / 8] |= 1 << (_i % 8); \
+    _a[_i / 8] |= 1 << (_i % 8); \
 })
 
-#define REMOVE_TAG(c, i) \
+#define REMOVE_TAG(a, i) \
 ({ \
-    uint8_t *const _c = (c); \
+    uint8_t *const _a = TagList.archs[a]; \
     const size_t _i = (i); \
-    _c[_i / 8] &= ~(1 << (_i % 8)); \
+    _a[_i / 8] &= ~(1 << (_i % 8)); \
 })
 
-#define HAS_TAG(c, i) \
+#define HAS_TAG(a, i) \
 ({ \
-    const uint8_t *const _c = (c); \
+    const uint8_t *const _a = TagList.archs[a]; \
     const size_t _i = (i); \
-    !!(_c[_i / 8] & (1 << (_i % 8))); \
+    !!(_a[_i / 8] & (1 << (_i % 8))); \
 })
 
 int InitTagSystem(void);
 int CacheTags(void);
-char *CompToString(uint8_t *comp);
-uint8_t *StringToComp(const char *s);
-uint8_t *AddComposition(uint8_t *prev, size_t tagid);
+char *ArchToString(size_t archid);
+size_t StringToArch(const char *s);
+size_t AddArch(size_t archid, size_t tagid);
 
 struct file {
-    time_t time;
+    struct stat st;
     char *name;
-    uint8_t *tags;
+    size_t archid;
 };
 
+/*
+ * creates/removes symlinks to match the archid
+ */
+int SetTags(struct file *file);
 char *GetFilePath(const char *name);
 
 extern struct file_list {

@@ -29,7 +29,6 @@ void RenderUI(void)
     erase();
     RenderScroller();
     RenderControls();
-    mvprintw(0, 0, "%zu", TagList.num);
 }
 
 int main(void)

@@ -8,13 +8,11 @@
 #include <string.h>
 #include <string.h>
 #include <sys/inotify.h>
-#include <sys/stat.h>
 #include <unistd.h>
 
 const char *Default;
 
 int NotifyFD;
-int BaseWD;
 
 struct tag_list TagList;
 struct file_list FileList;
@@ -46,6 +44,12 @@ static int AddTag(const char *cname)
 {
     struct tag tag;
 
+    for (size_t i = 0; i < TagList.num; i++) {
+        if (strcmp(TagList.tags[i].name, cname) == 0) {
+            return 0;
+        }
+    }
+
     char *const name = Strdup(cname);
     if (name == NULL) {
         return -1;
@@ -53,6 +57,19 @@ static int AddTag(const char *cname)
     if (TagList.num >= TagList.cap) {
         TagList.cap *= 2;
         TagList.cap++;
+
+        if ((TagList.num + 1) % 8 == 0) {
+            const size_t as = TagList.num / 8 + 2;
+            for (size_t id = 0; id < TagList.archn; id++) {
+                uint8_t *const a = Realloc(TagList.archs[id],
+                        sizeof(*a) * as);
+                if (a == NULL) {
+                    return -1;
+                }
+                TagList.archs[id] = a;
+                TagList.archs[id][as - 1] = 0;
+            }
+        }
 
         pthread_mutex_lock(&TagList.lock);
         struct tag *const v = Realloc(TagList.tags, sizeof(*TagList.tags) * TagList.cap);
@@ -66,7 +83,7 @@ static int AddTag(const char *cname)
     if (strcmp(name, Default) == 0) {
         TagList.all = TagList.num;
     }
-    tag.wd = inotify_add_watch(NotifyFD, name, IN_CREATE | IN_MOVE);
+    tag.wd = inotify_add_watch(NotifyFD, name, IN_CREATE | IN_DELETE | IN_MOVE | IN_ATTRIB);
     if (tag.wd == -1) {
         Free(name);
         return -1;
@@ -82,7 +99,7 @@ static int GetTags(struct file *f)
     char *buf;
     size_t cap;
 
-    f->tags = NULL;
+    f->archid = SIZE_MAX;
 
     n = strlen(f->name);
     cap = 128 + n;
@@ -108,10 +125,56 @@ static int GetTags(struct file *f)
         buf[nt] = '/';
         strcpy(&buf[nt + 1], f->name);
         if (access(buf, F_OK) == 0) {
-            f->tags = AddComposition(f->tags, i);
-            if (f->tags == NULL) {
+            f->archid = AddArch(f->archid, i);
+            if (f->archid == SIZE_MAX) {
                 Free(buf);
                 return -1;
+            }
+        }
+    }
+    Free(buf);
+    return 0;
+}
+
+int SetTags(struct file *f)
+{
+    char *buf;
+    size_t cap;
+
+    const size_t n = strlen(f->name);
+
+    cap = 128 + n;
+    buf = Malloc(cap);
+    if (buf == NULL) {
+        return -1;
+    }
+
+    for (size_t id = 0; id < TagList.num; id++) {
+        if (id == TagList.all) {
+            continue;
+        }
+        struct tag *const tag = &TagList.tags[id];
+        const size_t nt = strlen(tag->name);
+        const size_t req = nt + 1 + n + 1;
+        if (req > cap) {
+            cap = req;
+            char *const b = Realloc(buf, cap);
+            if (b == NULL) {
+                Free(buf);
+                return -1;
+            }
+            buf = b;
+        }
+        sprintf(buf, "%s/%s", tag->name, f->name);
+        if (access(buf, F_OK) == 0) {
+            if (!HAS_TAG(f->archid, id)) {
+                unlink(buf);
+            }
+        } else {
+            if (HAS_TAG(f->archid, id)) {
+                char buf2[3 + strlen(Default) + 1 + n + 1];
+                sprintf(buf2, "../%s/%s", Default, f->name);
+                symlink(buf2, buf);
             }
         }
     }
@@ -126,30 +189,51 @@ char *GetFilePath(const char *name)
     return buf;
 }
 
-static int AddFile(const char *name, int dirfd)
+static int CacheFile(const char *name, int dirfd)
 {
     struct file f;
-    struct stat st;
+    bool e = true;
 
     if (dirfd > 0) {
-        if (fstatat(dirfd, name, &st, 0) == -1) {
-            return -1;
-        }
-        if (!S_ISREG(st.st_mode)) {
-            return 1;
+        if (fstatat(dirfd, name, &f.st, 0) == -1) {
+            e = false;
         }
     } else {
-        if (stat(GetFilePath(name), &st) == -1) {
-            return -1;
+        if (stat(GetFilePath(name), &f.st) == -1) {
+            e = false;
         }
+    }
+    if (!S_ISREG(f.st.st_mode)) {
+        e = false;
+    }
+
+    for (size_t i = 0; i < FileList.num; i++) {
+        if (strcmp(FileList.files[i].name, name) == 0) {
+            if (!e) {
+                pthread_mutex_lock(&FileList.lock);
+                FileList.num--;
+                memmove(&FileList.files[i], &FileList.files[i + 1],
+                        sizeof(*FileList.files) * (FileList.num - i));
+                pthread_mutex_unlock(&FileList.lock);
+                return 0;
+            }
+            FileList.files[i].st = f.st;
+            if (GetTags(&FileList.files[i]) < 0) {
+                return -1;
+            }
+            return 0;
+        }
+    }
+
+    if (!e) {
+        return -1;
     }
 
     f.name = Strdup(name);
     if (f.name == NULL) {
         return -1;
     }
-    f.time = st.st_mtime;
-    f.tags = 0;
+    f.archid = SIZE_MAX;
 
     if (FileList.num >= FileList.cap) {
         FileList.cap *= 2;
@@ -191,7 +275,7 @@ int CacheFiles(void)
         if (ent->d_type != DT_REG) {
             continue;
         }
-        if (AddFile(ent->d_name, fd) < 0) {
+        if (CacheFile(ent->d_name, fd) < 0) {
             closedir(dir);
             return -1;
         }
@@ -257,15 +341,27 @@ void *WatchThread(void *unused)
                         AddTag(ie->name);
                     }
                 } else {
-                    if (TagList.tags[TagList.all].wd == ie->wd) {
-                        AddFile(ie->name, -1);
-                        NotifyScroller();
-                    }
+                    CacheFile(ie->name, -1);
+                    NotifyScroller();
                 }
             }
-            if (ie->mask & IN_MOVED_FROM) {
+            if (ie->mask & IN_DELETE) {
+                if (TagList.wd == ie->wd) {
+                    const size_t tagid = TAG_ID(ie->name);
+                    if (tagid == SIZE_MAX) {
+                        continue;
+                    }
+                    for (size_t id = 0; id < TagList.archn; id++) {
+                        REMOVE_TAG(id, tagid);
+                    }
+                } else {
+                    CacheFile(ie->name, -1);
+                }
+                NotifyScroller();
             }
-            if (ie->mask & IN_MOVED_TO) {
+            if (ie->mask & (IN_ATTRIB | IN_MOVED_FROM | IN_MOVED_TO)) {
+                CacheFile(ie->name, -1);
+                NotifyScroller();
             }
         }
     }
@@ -294,7 +390,8 @@ int InitTagSystem(void)
         close(NotifyFD);
         return -1;
     }
-    TagList.wd = inotify_add_watch(NotifyFD, ".", IN_CREATE | IN_MOVE);
+    TagList.wd = inotify_add_watch(NotifyFD, ".",
+            IN_CREATE | IN_DELETE | IN_MOVE | IN_ATTRIB);
     if (TagList.wd == -1) {
         goto err;
     }
@@ -316,14 +413,14 @@ err:
     return -1;
 }
 
-char *CompToString(uint8_t *comp)
+char *ArchToString(size_t archid)
 {
     static char buf[1024];
     size_t n = 0;
 
-    const size_t s = COMP_SIZE();
+    const size_t s = ARCH_SIZE();
     for (size_t i = 0; i < s; i++) {
-        uint8_t c = comp[i];
+        uint8_t c = TagList.archs[archid][i];
         size_t id = i * 8;
         while (c) {
             if (c & 0x1) {
@@ -344,76 +441,82 @@ char *CompToString(uint8_t *comp)
     return buf;
 }
 
-uint8_t *StringToComp(const char *s)
+size_t StringToArch(const char *s)
 {
-    const size_t cs = COMP_SIZE();
-    uint8_t empty[cs];
-    uint8_t *comp;
-    memset(empty, 0, cs);
-    comp = empty;
+    size_t archid = SIZE_MAX;
     while (*s != '\0') {
         const char *e = s;
         while (*e != '/' && *e != '\0') {
             e++;
         }
-        const size_t id = TAG_ID_L(s, e - s);
-        if (id != TagList.num) {
-            comp = AddComposition(comp, id);
+        size_t tagid = TAG_ID_L(s, e - s);
+        if (tagid == TagList.num) {
+            char name[e - s + 1];
+            memcpy(name, s, e - s + 1);
+            name[e - s] = '\0';
+            if (mkdir(name, 0755) == -1) {
+                return SIZE_MAX;
+            }
+            if (AddTag(name) == -1) {
+                return SIZE_MAX;
+            }
         }
+        archid = AddArch(archid, tagid);
         if (*e == '\0') {
             break;
         }
         s = e + 1;
     }
-    return comp;
+    return archid;
 }
 
-uint8_t *AddComposition(uint8_t *prev, size_t tagid)
+size_t AddArch(size_t archid, size_t tagid)
 {
-    const size_t s = COMP_SIZE();
-    for (size_t i = 0; i < TagList.compn; i++) {
-        uint8_t *const comp = TagList.comps[i];
-
-        if (!HAS_TAG(comp, tagid)) {
+    const size_t s = ARCH_SIZE();
+    for (size_t id = 0; id < TagList.archn; id++) {
+        if (!HAS_TAG(id, tagid)) {
             continue;
         }
 
-        REMOVE_TAG(comp, tagid);
+        REMOVE_TAG(id, tagid);
 
         bool miss = false;
 
         for (size_t j = 0; j < s; j++) {
-            miss = comp[j] != (prev == NULL ? 0 : prev[j]);
+            miss = TagList.archs[id][j] !=
+                (archid == SIZE_MAX ? 0 :
+                TagList.archs[archid][j]);
             if (miss) {
                 break;
             }
         }
 
-        ADD_TAG(comp, tagid);
+        ADD_TAG(id, tagid);
 
         if (!miss) {
-            return comp;
+            return id;
         }
     }
 
-    uint8_t **const p = Realloc(TagList.comps, sizeof(*TagList.comps) *
-            (TagList.compn + 1));
+    uint8_t **const p = Realloc(TagList.archs,
+            sizeof(*TagList.archs) * (TagList.archn + 1));
     if (p == NULL) {
-        return NULL;
+        return SIZE_MAX;
     }
-    TagList.comps = p;
+    TagList.archs = p;
 
-    uint8_t *const comp = Malloc(sizeof(*comp) * s);
-    if (comp == NULL) {
-        return NULL;
+    uint8_t *const arch = Malloc(sizeof(*arch) * s);
+    if (arch == NULL) {
+        return SIZE_MAX;
     }
-    if (prev == NULL) {
-        memset(comp, 0, sizeof(*comp) * s);
+    if (archid == SIZE_MAX) {
+        memset(arch, 0, sizeof(*arch) * s);
     } else {
-        memcpy(comp, prev, sizeof(*comp) * s);
+        memcpy(arch, TagList.archs[archid], sizeof(*arch) * s);
     }
-    ADD_TAG(comp, tagid);
-    TagList.comps[TagList.compn++] = comp;
-    return comp;
+    archid = TagList.archn++;
+    TagList.archs[archid] = arch;
+    ADD_TAG(archid, tagid);
+    return archid;
 }
 
