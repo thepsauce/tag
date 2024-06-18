@@ -1,6 +1,6 @@
 #include "tag.h"
 #include "scroller.h"
-#include "screen.h"
+#include "log.h"
 
 #include <dirent.h>
 #include <glob.h>
@@ -17,29 +17,6 @@ int NotifyFD;
 struct tag_list TagList;
 struct file_list FileList;
 
-static inline int InitAllDirectory(void)
-{
-    static const char *def = "all";
-    Default = getenv("TAG_DEFAULT_DIR");
-    if (Default == NULL) {
-        Default = def;
-    }
-
-    glob_t g;
-    char buf[2];
-    do {
-        if (glob(Default, GLOB_MARK | GLOB_NOSORT, NULL, &g) == 0) {
-            globfree(&g);
-            return 0;
-        }
-        chdir("..");
-            /* go up until we hit the root which is the only path that
-             * can fit in char[2] */
-    } while (getcwd(buf, sizeof(buf)) == NULL);
-
-    return -1;
-}
-
 static int AddTag(const char *cname)
 {
     struct tag tag;
@@ -51,33 +28,20 @@ static int AddTag(const char *cname)
     }
 
     char *const name = Strdup(cname);
-    if (name == NULL) {
-        return -1;
-    }
     if (TagList.num >= TagList.cap) {
         TagList.cap *= 2;
         TagList.cap++;
 
+        pthread_mutex_lock(&TagList.lock);
         if ((TagList.num + 1) % 8 == 0) {
             const size_t as = TagList.num / 8 + 2;
             for (size_t id = 0; id < TagList.archn; id++) {
-                uint8_t *const a = Realloc(TagList.archs[id],
-                        sizeof(*a) * as);
-                if (a == NULL) {
-                    return -1;
-                }
-                TagList.archs[id] = a;
+                TagList.archs[id] = Realloc(TagList.archs[id],
+                        sizeof(*TagList.archs[id]) * as);
                 TagList.archs[id][as - 1] = 0;
             }
         }
-
-        pthread_mutex_lock(&TagList.lock);
-        struct tag *const v = Realloc(TagList.tags, sizeof(*TagList.tags) * TagList.cap);
-        if (v == NULL) {
-            Free(name);
-            return -1;
-        }
-        TagList.tags = v;
+        TagList.tags = Realloc(TagList.tags, sizeof(*TagList.tags) * TagList.cap);
         pthread_mutex_unlock(&TagList.lock);
     }
     if (strcmp(name, Default) == 0) {
@@ -85,6 +49,7 @@ static int AddTag(const char *cname)
     }
     tag.wd = inotify_add_watch(NotifyFD, name, IN_CREATE | IN_DELETE | IN_MOVE | IN_ATTRIB);
     if (tag.wd == -1) {
+        ErrLog("Failed creating inotify watch for '%s'", name);
         Free(name);
         return -1;
     }
@@ -93,7 +58,7 @@ static int AddTag(const char *cname)
     return 0;
 }
 
-static int GetTags(struct file *f)
+static void GetTags(struct file *f)
 {
     size_t n;
     char *buf;
@@ -104,9 +69,6 @@ static int GetTags(struct file *f)
     n = strlen(f->name);
     cap = 128 + n;
     buf = Malloc(cap);
-    if (buf == NULL) {
-        return -1;
-    }
 
     for (size_t i = 0; i < TagList.num; i++) {
         struct tag *const tag = &TagList.tags[i];
@@ -114,26 +76,16 @@ static int GetTags(struct file *f)
         const size_t req = nt + 1 + n + 1;
         if (req > cap) {
             cap = req;
-            char *const b = Realloc(buf, cap);
-            if (b == NULL) {
-                Free(buf);
-                return -1;
-            }
-            buf = b;
+            buf = Realloc(buf, cap);
         }
         memcpy(buf, tag->name, nt);
         buf[nt] = '/';
         strcpy(&buf[nt + 1], f->name);
         if (access(buf, F_OK) == 0) {
             f->archid = AddArch(f->archid, i);
-            if (f->archid == SIZE_MAX) {
-                Free(buf);
-                return -1;
-            }
         }
     }
     Free(buf);
-    return 0;
 }
 
 int SetTags(struct file *f)
@@ -145,9 +97,6 @@ int SetTags(struct file *f)
 
     cap = 128 + n;
     buf = Malloc(cap);
-    if (buf == NULL) {
-        return -1;
-    }
 
     for (size_t id = 0; id < TagList.num; id++) {
         if (id == TagList.all) {
@@ -158,12 +107,7 @@ int SetTags(struct file *f)
         const size_t req = nt + 1 + n + 1;
         if (req > cap) {
             cap = req;
-            char *const b = Realloc(buf, cap);
-            if (b == NULL) {
-                Free(buf);
-                return -1;
-            }
-            buf = b;
+            buf = Realloc(buf, cap);
         }
         sprintf(buf, "%s/%s", tag->name, f->name);
         if (access(buf, F_OK) == 0) {
@@ -218,9 +162,7 @@ static int CacheFile(const char *name, int dirfd)
                 return 0;
             }
             FileList.files[i].st = f.st;
-            if (GetTags(&FileList.files[i]) < 0) {
-                return -1;
-            }
+            GetTags(&FileList.files[i]);
             return 0;
         }
     }
@@ -230,9 +172,6 @@ static int CacheFile(const char *name, int dirfd)
     }
 
     f.name = Strdup(name);
-    if (f.name == NULL) {
-        return -1;
-    }
     f.archid = SIZE_MAX;
 
     if (FileList.num >= FileList.cap) {
@@ -240,20 +179,12 @@ static int CacheFile(const char *name, int dirfd)
         FileList.cap++;
 
         pthread_mutex_lock(&FileList.lock);
-        struct file *const v = Realloc(FileList.files,
+        FileList.files = Realloc(FileList.files,
                 sizeof(*FileList.files) * FileList.cap);
-        if (v == NULL) {
-            Free(f.name);
-            return -1;
-        }
-        FileList.files = v;
         pthread_mutex_unlock(&FileList.lock);
     }
     FileList.files[FileList.num] = f;
-    if (GetTags(&FileList.files[FileList.num]) < 0) {
-        Free(f.name);
-        return -1;
-    }
+    GetTags(&FileList.files[FileList.num]);
     FileList.num++;
     return 0;
 }
@@ -307,19 +238,12 @@ int CacheTags(void)
             continue;
         }
         if (AddTag(ent->d_name) < 0) {
-            goto err;
+            closedir(dir);
+            return -1;
         }
     }
-    return 0;
-
-err:
     closedir(dir);
-    for (size_t i = 0; i < TagList.num; i++) {
-        inotify_rm_watch(NotifyFD, TagList.tags[i].wd);
-        Free(TagList.tags[i].name);
-    }
-    Free(TagList.tags);
-    return -1;
+    return 0;
 }
 
 void *WatchThread(void *unused)
@@ -335,7 +259,11 @@ void *WatchThread(void *unused)
         len = read(NotifyFD, buf, sizeof(buf));
         for (char *b = buf; b < buf + len; b += sizeof(*ie) + ie->len) {
             ie = (struct inotify_event*) b;
+            if (TagList.wd == ie->wd && ie->name[0] == '.') {
+                continue;
+            }
             if (ie->mask & IN_CREATE) {
+                Log("File '%s' created on file system", ie->name);
                 if (TagList.wd == ie->wd) {
                     if (stat(Default, &st) == 0 && S_ISDIR(st.st_mode)) {
                         AddTag(ie->name);
@@ -346,6 +274,7 @@ void *WatchThread(void *unused)
                 }
             }
             if (ie->mask & IN_DELETE) {
+                Log("File '%s' deleted on file system", ie->name);
                 if (TagList.wd == ie->wd) {
                     const size_t tagid = TAG_ID(ie->name);
                     if (tagid == SIZE_MAX) {
@@ -360,6 +289,7 @@ void *WatchThread(void *unused)
                 NotifyScroller();
             }
             if (ie->mask & (IN_ATTRIB | IN_MOVED_FROM | IN_MOVED_TO)) {
+                Log("File '%s' changed on file system", ie->name);
                 CacheFile(ie->name, -1);
                 NotifyScroller();
             }
@@ -377,40 +307,57 @@ void *CacheThread(void *unused)
     return NULL;
 }
 
+static inline int InitAllDirectory(void)
+{
+    static const char *def = "all";
+    Default = getenv("TAG_DEFAULT_DIR");
+    if (Default == NULL) {
+        Default = def;
+    }
+
+    glob_t g;
+    char buf[2];
+    do {
+        if (glob(Default, GLOB_MARK | GLOB_NOSORT, NULL, &g) == 0) {
+            globfree(&g);
+            return 0;
+        }
+        chdir("..");
+            /* go up until we hit the root which is the only path that
+             * can fit in char[2] */
+    } while (getcwd(buf, sizeof(buf)) == NULL);
+
+    return -1;
+}
+
 int InitTagSystem(void)
 {
     if (InitAllDirectory() < 0) {
+        ErrLog("Could not find directory called '%s'", Default);
         return -1;
     }
     NotifyFD = inotify_init();
     if (NotifyFD < 0) {
+        ErrLog("Could not initialize inotify");
         return -1;
     }
     if (CacheTags() < 0) {
-        close(NotifyFD);
+        ErrLog("Could not cache all tags");
         return -1;
     }
     TagList.wd = inotify_add_watch(NotifyFD, ".",
             IN_CREATE | IN_DELETE | IN_MOVE | IN_ATTRIB);
     if (TagList.wd == -1) {
-        goto err;
+        ErrLog("Could add inotify watch for base directory");
+        return -1;
     }
     pthread_t tid;
-    if (pthread_create(&tid, 0, WatchThread, NULL) != 0) {
-        goto err;
-    }
-    if (pthread_create(&tid, 0, CacheThread, NULL) != 0) {
-        goto err;
+    if (pthread_create(&tid, 0, WatchThread, NULL) != 0 ||
+            pthread_create(&tid, 0, CacheThread, NULL) != 0) {
+        ErrLog("Could not create watch and cache threads");
+        return -1;
     }
     return 0;
-
-err:
-    for (size_t i = 0; i < TagList.num; i++) {
-        Free(TagList.tags[i].name);
-    }
-    Free(TagList.tags);
-    close(NotifyFD);
-    return -1;
 }
 
 char *ArchToString(size_t archid)
@@ -498,25 +445,20 @@ size_t AddArch(size_t archid, size_t tagid)
         }
     }
 
-    uint8_t **const p = Realloc(TagList.archs,
+    pthread_mutex_lock(&TagList.lock);
+    TagList.archs = Realloc(TagList.archs,
             sizeof(*TagList.archs) * (TagList.archn + 1));
-    if (p == NULL) {
-        return SIZE_MAX;
-    }
-    TagList.archs = p;
+    pthread_mutex_unlock(&TagList.lock);
 
     uint8_t *const arch = Malloc(sizeof(*arch) * s);
-    if (arch == NULL) {
-        return SIZE_MAX;
-    }
     if (archid == SIZE_MAX) {
         memset(arch, 0, sizeof(*arch) * s);
     } else {
         memcpy(arch, TagList.archs[archid], sizeof(*arch) * s);
     }
+    TagList.archs[TagList.archn] = arch;
+    ADD_TAG(TagList.archn, tagid);
     archid = TagList.archn++;
-    TagList.archs[archid] = arch;
-    ADD_TAG(archid, tagid);
     return archid;
 }
 

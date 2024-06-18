@@ -4,6 +4,10 @@
 #include "gfx.h"
 
 #include <stdlib.h>
+#include <setjmp.h>
+
+extern bool UIRunning;
+extern jmp_buf UIJumpBuffer;
 
 struct event {
     int key;
@@ -42,10 +46,10 @@ extern struct mouse {
 extern Point Cursor;
 
 extern bool UIDirty;
-extern bool UIRunning;
 
 enum color_pair {
     CP_NORMAL,
+    CP_ELOG,
     CP_ALT1,
     CP_ALT2,
     CP_FOCUS,
@@ -107,6 +111,15 @@ void *Realloc(void *ptr, size_t size);
 void *Strdup(const char *s);
 void Free(void *ptr);
 WINDOW *Newpad(int nlines, int ncols);
+
+#define FreeAll(...) \
+({ \
+    void *const _p[] = { __VA_ARGS__ }; \
+    for (size_t i = 0; i < ARRAY_SIZE(_p); i++) { \
+        Free(_p[i]); \
+    } \
+})
+
 
 void EndScreen(void);
 

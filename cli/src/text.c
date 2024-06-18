@@ -10,11 +10,7 @@ int InsertText(struct text *text, const char *s)
     if (text->len + l + 1 > text->cap) {
         text->cap *= 2;
         text->cap += l + 1;
-        char *const p = Realloc(text->s, text->cap);
-        if (p == NULL) {
-            return -1;
-        }
-        text->s = p;
+        text->s = Realloc(text->s, text->cap);
     }
 
     memmove(&text->s[text->index + l],
@@ -259,7 +255,7 @@ int DrawText(WINDOW *win, struct text *text)
 
         char b[12];
         if (ch == '/' && (text->flags & DT_SLASH)) {
-            color = (CP_ALT1 | CP_ALT2) ^ color;
+            color = CP_ALT1 + CP_ALT2 - color;
             wcolor_set(win, CP_NORMAL, NULL);
             b[0] = '/';
             b[1] = '\0';

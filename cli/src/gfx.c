@@ -15,21 +15,9 @@ struct brush *CreateBrush(const char *name, WINDOW *pat, bool o)
     struct brush **p;
     struct brush *br;
 
-    p = Realloc(Brushes.p, sizeof(*p) * (Brushes.n + 1));
-    if (p == NULL) {
-        return NULL;
-    }
-    Brushes.p = p;
-
+    Brushes.p = Realloc(Brushes.p, sizeof(*p) * (Brushes.n + 1));
     br = Malloc(sizeof(*br));
-    if (br == NULL) {
-        return NULL;
-    }
     br->name = Strdup(name);
-    if (br->name == NULL) {
-        Free(br);
-        return NULL;
-    }
     br->pat = pat;
     br->o = o;
 
@@ -243,14 +231,9 @@ void DrawStroke(const struct stroke *st, WINDOW *win, int dx, int dy)
 
 int AddPoint(struct stroke *st, Point pt)
 {
-    Point *p;
     int dx, dy;
 
-    p = Realloc(st->p, sizeof(*st->p) * (st->n + 1));
-    if (p == NULL) {
-        return -1;
-    }
-    st->p = p;
+    st->p = Realloc(st->p, sizeof(*st->p) * (st->n + 1));
 
     st->p[st->n++] = pt;
 

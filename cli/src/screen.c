@@ -1,16 +1,21 @@
 #include "macros.h"
+#include "log.h"
 #include "screen.h"
+#include "tag.h"
 
 #include <locale.h>
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pthread.h>
+
+bool UIRunning;
+jmp_buf UIJumpBuffer;
 
 struct mouse Mouse;
 Point Cursor = { -1, 0 };
 
 bool UIDirty;
-bool UIRunning;
 
 int InitScreen(void)
 {
@@ -21,6 +26,7 @@ int InitScreen(void)
     curses_trace(TRACE_MAXIMUM);
 
     start_color();
+    init_pair(CP_ELOG, COLOR_RED, 0);
     init_pair(CP_ALT1, COLOR_RED, 0);
     init_pair(CP_ALT2, COLOR_BLUE, 0);
     init_pair(CP_FOCUS, COLOR_RED, 0);
@@ -202,16 +208,39 @@ void Notify(const char *title, const char *msg)
     Dialog(title, "An internal process failed: %s", msg, "[O]k", NULL);
 }
 
+/* either exit or move to the "top" of the stack,
+ * this may leave a lot of memory leaks */
+static inline void ClimbSurface(void)
+{
+    if (UIRunning) {
+        /* prevent dead locks */
+        pthread_mutex_unlock(&TagList.lock);
+        pthread_mutex_unlock(&FileList.lock);
+        longjmp(UIJumpBuffer, 0);
+    } else {
+        exit(EXIT_FAILURE);
+    }
+}
+
 void *Malloc(size_t size)
 {
     void *ptr;
 
+    if (size == 0) {
+        return NULL;
+    }
+
     do {
         ptr = malloc(size);
-    } while(size != 0 && ptr == NULL && Dialog("Memory error",
+    } while(ptr == NULL && Dialog("Memory error",
                 "Your system returned NULL when trying to "
                 "allocate %u bytes of memory, what do you want to do?",
                 size, "[T]ry again", "[C]ancel", NULL) == 1);
+
+    if (ptr == NULL) {
+        Log("Allocating %zu bytes failed", size);
+        ClimbSurface();
+    }
     return ptr;
 }
 
@@ -219,23 +248,42 @@ void *Calloc(size_t nmemb, size_t size)
 {
     void *ptr;
 
+    if (nmemb == 0 || size == 0) {
+        return NULL;
+    }
+
     do {
         ptr = calloc(nmemb, size);
-    } while(size != 0 && ptr == NULL && Dialog("Memory error",
+    } while(ptr == NULL && Dialog("Memory error",
                 "Your system returned NULL when trying to "
                 "allocate %u bytes of memory, what do you want to do?",
                 size, "[T]ry again", "[C]ancel", NULL) == 1);
+
+    if (ptr == NULL) {
+        Log("Allocating %zu bytes failed", size);
+        ClimbSurface();
+    }
     return ptr;
 }
 
 void *Realloc(void *ptr, size_t size)
 {
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+
     do {
         ptr = realloc(ptr, size);
-    } while(size != 0 && ptr == NULL && Dialog("Memory error",
+    } while(ptr == NULL && Dialog("Memory error",
                 "Your system returned NULL when trying to "
                 "allocate %u bytes of memory, what do you want to do?",
                 size, "[T]ry again", "[C]ancel", NULL) == 1);
+
+    if (ptr == NULL) {
+        Log("Reallocating to %zu bytes failed", size);
+        ClimbSurface();
+    }
     return ptr;
 }
 
@@ -249,6 +297,11 @@ void *Strdup(const char *s)
                 "Your system returned NULL when trying to "
                 "allocate %u bytes of memory, what do you want to do?",
                 strlen(s), "[T]ry again", "[C]ancel", NULL) == 1);
+
+    if (ptr == NULL) {
+        Log("String dupping %s failed", s);
+        ClimbSurface();
+    }
     return ptr;
 }
 
@@ -262,6 +315,11 @@ WINDOW *Newpad(int nlines, int ncols)
                 "Failed creating off screen window of size "
                 "%dx%d, what do you want to do?",
                 nlines, ncols, "[T]ry again", "[C]ancel", NULL) == 1);
+
+    if (ptr == NULL) {
+        Log("Failed creating new window of size %dx%d", nlines, ncols);
+        ClimbSurface();
+    }
     return ptr;
 }
 

@@ -63,6 +63,7 @@ static void SetIndex(size_t index)
     Scroller.index = index;
     if (Scroller.num > 0) {
         free(TagEdit.s);
+        /* using normal 'strdup' version here because it's easy to recover */
         TagEdit.s = strdup(ArchToString(FileList.files[Scroller.rei[Scroller.index]].archid));
         if (TagEdit.s == NULL) {
             TagEdit.len = 0;
@@ -86,12 +87,8 @@ int NotifyScroller(void)
 {
     if (FileList.num > Scroller.cap) {
         Scroller.cap = FileList.num;
-        size_t *const p = Realloc(Scroller.rei,
+        Scroller.rei = Realloc(Scroller.rei,
                 sizeof(*Scroller.rei) * Scroller.cap);
-        if (p == NULL) {
-            return -1;
-        }
-        Scroller.rei = p;
     }
 
     char ffilter[FileFilter.len + 3];

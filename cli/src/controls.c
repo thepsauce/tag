@@ -265,8 +265,8 @@ void RenderControls(void)
     if (Focused == NULL) {
         Cursor.x = -1;
     } else {
-        Cursor.x = Focused->r.x + 1 + Focused->cur.x;
-        Cursor.y = Focused->r.y + 1 + Focused->cur.y;
+        Cursor.x = Focused->r.x + 1 + Focused->cur.x - Focused->scroll.x;
+        Cursor.y = Focused->r.y + 1 + Focused->cur.y - Focused->scroll.y;
     }
 }
 
